@@ -21,7 +21,8 @@ Project Keil không dùng ARM Compiler 5. Compiler 6 dùng được cùng port G
 
 - Có sẵn: startup, linker, GPIO/RCC/DMA, UART đã sửa, FreeRTOS V11.1.0, IPC, hook lỗi, pin map,
   cấu hình task, Makefile, project Keil, quy trình Git và bảng giao việc.
-- Chưa làm: I2C, INA219, OLED, relay/button driver, bốn task, bootloader và ESP32 web OTA.
+- I2C1 (`hal_i2c`) đã viết: thư viện chung cho mọi thiết bị trên bus, biên dịch sạch, **chưa test trên kit**.
+- Chưa làm: INA219, OLED, relay/button driver, bốn task, bootloader và ESP32 web OTA.
 - Mặc định cả bốn `APP_ENABLE_* = 0`: chỉ chạy idle/timer của FreeRTOS, relay OFF theo cấu hình;
   chưa đo, chưa hiển thị, chưa nhận lệnh sản phẩm, chưa OTA. UART nền đã khởi tạo.
 - Bật một task khi chưa viết hàm `task_*_create()` sẽ lỗi link; đây là dấu hiệu chưa hoàn thành,
@@ -35,7 +36,7 @@ Project Keil không dùng ARM Compiler 5. Compiler 6 dùng được cùng port G
 | Đường dẫn | Nội dung / người sửa |
 |---|---|
 | `bsp/` | Pin/clock, khởi động, OFF khẩn cấp; Mạnh |
-| `hal/inc`, `hal/src` | Toàn bộ lớp phần cứng: ngoại vi MCU `hal_*` (GPIO/RCC/DMA/UART có sẵn, Mạnh bổ sung I2C) và thiết bị ngoài viết tiếp trên đó: INA219 (Mạnh), OLED (Công), relay/button (Võ) |
+| `hal/inc`, `hal/src` | Toàn bộ lớp phần cứng: ngoại vi MCU `hal_*` (GPIO/RCC/DMA/UART có sẵn, I2C của Mạnh) và thiết bị ngoài viết tiếp trên đó: INA219 (Mạnh), OLED (Công), relay/button (Võ) |
 | `app/inc`, `app/src` | Task của từng người; IPC/config/types/hooks do Mạnh giữ |
 | `middlewares/FreeRTOS-Kernel/` | Thư viện gốc, không giao thành viên viết lại |
 | `main.c`, `startup.c`, `FreeRTOSConfig.h` | Tích hợp chung; chỉ Mạnh sửa |

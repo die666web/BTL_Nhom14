@@ -26,7 +26,9 @@ Nhánh gợi ý: `feature/relay-button`, sau đó `feature/task-control`.
 | `tests/manual/CONG.md` | Model/địa chỉ OLED, ảnh màn, test lỗi | Test số âm/0, mất cảm biến, dữ liệu cũ và trạng thái OFF/ON |
 
 Không đọc INA219 hay GPIO relay trực tiếp. Không tự viết lại code I2C trong `oled.c`; chỉ gọi `hal_i2c`.
-Đợi I2C chung hoặc dùng mock dành cho test riêng; không merge mock vào firmware thật.
+I2C chung đã có (`hal/inc/hal_i2c.h`): gửi lệnh bằng `hal_i2c_mem_write(BSP_OLED_ADDR7, 0x00, cmd, n, t)`,
+gửi dữ liệu màn bằng `hal_i2c_mem_write(BSP_OLED_ADDR7, 0x40, buf, n, t)`; dò màn bằng `hal_i2c_is_ready`.
+Timeout ~0.1 ms/byte; cả khung 1 KiB cần >= 150 ms. Không merge mock vào firmware thật.
 Nếu cần font riêng: thêm `hal/inc/oled_font.h`/`hal/src/oled_font.c`, nhờ leader cập nhật manifest.
 **MAX7219 cũ không phải code OLED.** Chưa chốt IC OLED, không mặc định SSD1306 như sự thật.
 Nhánh: `feature/oled`, sau đó `feature/task-display`.
@@ -35,7 +37,7 @@ Nhánh: `feature/oled`, sau đó `feature/task-display`.
 
 | File | Việc còn phải viết |
 |---|---|
-| `hal/src/hal_i2c.c` | I2C1 đúng API đã chốt; mutex nằm trong từng transaction, timeout và recovery |
+| `hal/src/hal_i2c.c` | **Đã viết, chờ test kit.** I2C1 100 kHz polling; mutex trong từng transaction, timeout, NACK, recovery 9 xung SCL |
 | `hal/src/ina219.c` | Calibration theo shunt; đọc U/I, báo lỗi/overflow |
 | `app/src/task_measure.c` | Chu kỳ 200ms, lọc, P=U*I, publish valid/timestamp |
 | `app/src/task_comm.c` | Parser UART, lệnh queue, version, OTA REQUEST/OFF_ACK |

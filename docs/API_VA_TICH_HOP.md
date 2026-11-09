@@ -73,3 +73,20 @@ Không thêm task logic vào main. Không viết mock thành implementation chí
 Heap 10 KiB là ngân sách ban đầu, không chứng minh đủ khi thêm font/buffer/OTA:
 đo `xPortGetFreeHeapSize`, minimum-ever heap và `uxTaskGetStackHighWaterMark` trên kit.
 Không mở thêm timer/software queue không cần thiết mà không kiểm lại RAM.
+
+## Thư viện I2C chung (`hal_i2c.h`)
+
+Mọi driver thiết bị trên bus I2C1 chỉ gọi các hàm dưới, không chạm thanh ghi, không tự lấy mutex.
+Địa chỉ 7 bit chưa dịch (`BSP_OLED_ADDR7` = 0x3C, `BSP_INA219_ADDR7` = 0x40).
+
+| Hàm | Khung trên dây | Dùng cho |
+|---|---|---|
+| `hal_i2c_is_ready(addr, t)` | START, addr+W, STOP | Dò thiết bị, kiểm tra đấu dây |
+| `hal_i2c_write(addr, buf, n, t)` | START, addr+W, buf, STOP | Gói tự soạn sẵn |
+| `hal_i2c_read(addr, buf, n, t)` | START, addr+R, buf, STOP | Thiết bị không có thanh ghi |
+| `hal_i2c_mem_write(addr, reg, buf, n, t)` | START, addr+W, reg, buf, STOP | INA219 ghi thanh ghi 16 bit; OLED lệnh (reg=0x00) / dữ liệu (reg=0x40) |
+| `hal_i2c_mem_read(addr, reg, buf, n, t)` | START, addr+W, reg, Sr, addr+R, buf, STOP | INA219 đọc thanh ghi |
+
+- `HAL_ERROR`: thiết bị NACK hoặc lỗi bus; `HAL_TIMEOUT`: hết giờ. Cả hai đã tự giải phóng bus, gọi lại được ngay.
+- 100 kHz, polling: ~0.1 ms/byte, CPU bận trong lúc truyền. Task ưu tiên cao hơn vẫn chen vào được.
+- Chỉ gọi từ task, sau `vTaskStartScheduler`; `hal_i2c_init()` gọi ở main.
