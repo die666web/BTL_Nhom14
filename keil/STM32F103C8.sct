@@ -1,0 +1,12 @@
+; Standalone application ONLY. 64 KiB Flash, 20 KiB RAM.
+; ARM Compiler 6 full C runtime (__main). Do not enable MicroLIB.
+LR_IROM1 0x08000000 0x00010000 {
+  ER_IROM1 0x08000000 0x00010000 {
+    startup.o (.isr_vector, +First)
+    *(InRoot$$Sections)
+    .ANY (+RO)
+  }
+  RW_IRAM1 0x20000000 0x00004A00 { .ANY (+RW +ZI) }
+  ARM_LIB_HEAP 0x20004A00 EMPTY 0x00000200 { }
+  ARM_LIB_STACK 0x20005000 EMPTY -0x00000400 { }
+}

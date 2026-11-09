@@ -1,0 +1,37 @@
+# Build output (both environments)
+build/
+Debug/
+Release/
+Objects/
+Listings/
+*.o
+*.d
+*.elf
+*.axf
+*.hex
+*.bin
+*.map
+*.lst
+*.crf
+*.htm
+*.dep
+*.lnp
+*.bak
+*.uvoptx
+*.uvopt
+*.uvguix.*
+*.uvgui.*
+JLinkLog.txt
+JLinkSettings.ini
+.vscode/
+.idea/
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db
+# ESP32 local framework output and secrets
+.pio/
+sdkconfig.old
+secrets.h
+.env
+# Commit .uvprojx, .sct, .ld, Makefile and source manifests!
