@@ -10,7 +10,7 @@ FREERTOS := middlewares/FreeRTOS-Kernel
 PORT := $(FREERTOS)/portable/GCC/ARM_CM3
 include tools/sources.mk
 OBJS := $(addprefix $(BUILD)/,$(APP_SRCS:.c=.o))
-CPPFLAGS := -I. -Ibsp -Ihal/inc -Idrivers/inc -Iapp/inc -I$(FREERTOS)/include -I$(PORT) -DSTM32F10X_MD
+CPPFLAGS := -I. -Ibsp -Ihal/inc -Iapp/inc -I$(FREERTOS)/include -I$(PORT) -DSTM32F10X_MD
 CFLAGS := -mcpu=cortex-m3 -mthumb -mfloat-abi=soft -std=c11 -Wall -Wextra -Werror -Og -g3 -ffreestanding -fno-builtin -ffunction-sections -fdata-sections -MMD -MP
 LDFLAGS := -mcpu=cortex-m3 -mthumb -mfloat-abi=soft -T$(LDSCRIPT) -nostartfiles --specs=nano.specs --specs=nosys.specs -Wl,--gc-sections,-Map=$(TARGET).map
 .DEFAULT_GOAL := all

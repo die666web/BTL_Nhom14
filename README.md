@@ -10,7 +10,7 @@ không tạo hàm giả báo thành công. File có sẵn không giao viết l�
 
 | Môi trường | Mở/build | Mã nguồn |
 |---|---|---|
-| Linux, GCC ARM | `make -j4` ở thư mục này | Chung `main.c`, `bsp/`, `hal/`, `drivers/`, `app/`, `middlewares/` |
+| Linux, GCC ARM | `make -j4` ở thư mục này | Chung `main.c`, `bsp/`, `hal/`, `app/`, `middlewares/` |
 | Windows, Keil µVision 5 + ARM Compiler 6 | `keil/MCU_Project.uvprojx`, Rebuild | Chính các file ở cột trên, không copy vào thư mục Keil |
 
 Đọc [BUILD_LINUX_KEIL](docs/BUILD_LINUX_KEIL.md) để cài toolchain, cấu hình compiler, nạp/debug.
@@ -35,8 +35,7 @@ Project Keil không dùng ARM Compiler 5. Compiler 6 dùng được cùng port G
 | Đường dẫn | Nội dung / người sửa |
 |---|---|
 | `bsp/` | Pin/clock, khởi động, OFF khẩn cấp; Mạnh |
-| `hal/inc`, `hal/src` | Ngoại vi MCU; giữ GPIO/RCC/DMA/UART, Mạnh bổ sung I2C |
-| `drivers/inc`, `drivers/src` | INA219 (Mạnh), OLED (Công), relay/button (Võ) |
+| `hal/inc`, `hal/src` | Toàn bộ lớp phần cứng: ngoại vi MCU `hal_*` (GPIO/RCC/DMA/UART có sẵn, Mạnh bổ sung I2C) và thiết bị ngoài viết tiếp trên đó: INA219 (Mạnh), OLED (Công), relay/button (Võ) |
 | `app/inc`, `app/src` | Task của từng người; IPC/config/types/hooks do Mạnh giữ |
 | `middlewares/FreeRTOS-Kernel/` | Thư viện gốc, không giao thành viên viết lại |
 | `main.c`, `startup.c`, `FreeRTOSConfig.h` | Tích hợp chung; chỉ Mạnh sửa |

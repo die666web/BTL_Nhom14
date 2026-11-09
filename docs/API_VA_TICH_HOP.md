@@ -3,8 +3,12 @@
 ## Phân tầng
 
 - BSP: chân, clock và trạng thái an toàn của board.
-- HAL: ngoại vi của MCU; `hal_gpio.h` giữ tên hàm `GPIO_*` đã có, không buộc viết lại.
-- Drivers: biết INA219/OLED/relay/button; sử dụng HAL.
+- HAL (`hal/`): mọi code chạm phần cứng, gồm hai phần nằm chung thư mục:
+  - Ngoại vi MCU, file `hal_*`: GPIO/RCC/DMA/UART/I2C. `hal_gpio.h` giữ tên hàm `GPIO_*` đã có, không buộc viết lại.
+  - Thiết bị ngoài, file không có tiền tố `hal_`: `ina219`, `oled`, `relay`, `button`.
+    Đây là code viết tiếp trên các hàm `hal_*` (ví dụ `ina219.c` gọi `hal_i2c`), **không phải task**:
+    chỉ là hàm thư viện được task gọi, không tự chạy, không có vòng lặp/delay riêng.
+    File thiết bị không được ghi thanh ghi trực tiếp; cần ngoại vi gì thì gọi `hal_*`.
 - App: task, lịch chạy, dữ liệu/queue; không thao tác thanh ghi trực tiếp.
 - Main: init một lần, tạo IPC/task, start scheduler; leader quản lý.
 
@@ -16,7 +20,7 @@ Mã không phụ thuộc đường dẫn CMSIS bên ngoài như Makefile cũ.
 | Tài nguyên | Chủ sở hữu / cơ chế |
 |---|---|
 | PB8 relay | TaskControl duy nhất ghi trong vận hành; BSP force-off chỉ startup/panic |
-| PA0 button | TaskControl poll qua driver, 20ms, không dùng TIM2_CH1 |
+| PA0 button | TaskControl gọi `button_poll_pressed` mỗi 20ms, không dùng TIM2_CH1 |
 | I2C1 | HAL lấy g_i2c_mutex cho cả transaction (kể cả repeated START); không khóa lồng |
 | INA219 | TaskMeasure duy nhất; không giữ mutex I2C khi delay chờ conversion |
 | OLED | TaskDisplay duy nhất; địa chỉ 7-bit riêng, cùng bus |
@@ -41,7 +45,7 @@ UART queue dùng API FromISR và IRQ priority 6 (numerical >=5). Không đổi p
 - `g_command_queue`: 8 phần tử enum `app_command_t`; Comm gửi có timeout, báo lỗi khi đầy.
 - `valid=false` và timestamp bảo đảm Display không giả vờ số đo cũ còn hợp lệ.
 - Đơn vị nội bộ V/A/W; chỉ UI chuyển A → mA. Current có thể âm.
-- Mỗi task gọi driver init của nó một lần khi bắt đầu; I2C init chung ở main trước task.
+- Mỗi task gọi hàm init thiết bị của nó (`ina219_init`, `oled_init`...) một lần khi bắt đầu; I2C init chung ở main trước task.
 
 ## OTA handshake cần triển khai trong hai task
 

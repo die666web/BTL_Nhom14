@@ -3,6 +3,8 @@
 ## Cấu trúc và build
 
 - `lib/gpio,rcc,dma,uart` -> `hal/inc/hal_*.h`, `hal/src/hal_*.c`; giữ tên hàm cũ khi có thể.
+- Gộp thư mục `drivers/` cũ vào `hal/`: `ina219`, `oled`, `relay`, `button` nay nằm ở `hal/inc` + `hal/src`
+  cạnh các file `hal_*`; bỏ include path `drivers/inc`, nhóm Keil "Drivers" nhập vào "HAL". Không đổi API.
 - FreeRTOS nguyên gốc -> `middlewares/FreeRTOS-Kernel`; kernel V11.1.0 không sửa.
 - SPI, TIM2 PWM, MAX7219 -> `extras/legacy/`, giữ mã gốc (chỉ đổi include), không build mặc định.
   Chúng chưa được nâng cấp thành driver dùng chung an toàn RTOS; có chờ polling vô hạn ở SPI cũ.

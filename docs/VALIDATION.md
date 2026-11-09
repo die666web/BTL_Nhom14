@@ -11,7 +11,7 @@
 | Project Keil | XML parse được, path source/include/scatter hợp lệ, ARM Compiler 6, MicroLIB tắt |
 | Vector table từ ELF/BIN GCC | MSP 0x20005000; vector ở 0x08000000; Reset/SVC/PendSV/SysTick/USART1 đúng strong handler, Thumb bit |
 | FreeRTOS vendored | 811 file giữ nguyên byte từ ZIP gốc, có license |
-| Module giao việc | I2C, 4 driver, 4 task vẫn chỉ header và TODO; không stub trả thành công |
+| Module giao việc | I2C, 4 module thiết bị trong `hal/` (INA219/OLED/relay/button), 4 task vẫn chỉ header và TODO; không stub trả thành công |
 
 Kích thước bản GCC mặc định (chưa bật bốn task):
 

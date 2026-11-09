@@ -2,15 +2,15 @@
 APP_SRCS := main.c \
     startup.c \
     bsp/bsp.c \
+    hal/src/button.c \
     hal/src/hal_dma.c \
     hal/src/hal_gpio.c \
     hal/src/hal_i2c.c \
     hal/src/hal_rcc.c \
     hal/src/hal_uart.c \
-    drivers/src/button.c \
-    drivers/src/ina219.c \
-    drivers/src/oled.c \
-    drivers/src/relay.c \
+    hal/src/ina219.c \
+    hal/src/oled.c \
+    hal/src/relay.c \
     app/src/app_ipc.c \
     app/src/rtos_hooks.c \
     app/src/task_comm.c \

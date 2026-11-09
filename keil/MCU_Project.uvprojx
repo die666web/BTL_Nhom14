@@ -105,7 +105,7 @@
               <MiscControls>-std=c11 -Wall -Wextra -Werror -ffunction-sections -fdata-sections</MiscControls>
               <Define>STM32F10X_MD</Define>
               <Undefine />
-              <IncludePath>..;..\bsp;..\hal\inc;..\drivers\inc;..\app\inc;..\middlewares\FreeRTOS-Kernel\include;..\middlewares\FreeRTOS-Kernel\portable\GCC\ARM_CM3</IncludePath>
+              <IncludePath>..;..\bsp;..\hal\inc;..\app\inc;..\middlewares\FreeRTOS-Kernel\include;..\middlewares\FreeRTOS-Kernel\portable\GCC\ARM_CM3</IncludePath>
             </VariousControls>
           </Cads>
           <LDads>
@@ -157,6 +157,11 @@
           <GroupName>HAL</GroupName>
           <Files>
             <File>
+              <FileName>button.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\hal\src\button.c</FilePath>
+            </File>
+            <File>
               <FileName>hal_dma.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\hal\src\hal_dma.c</FilePath>
@@ -181,30 +186,20 @@
               <FileType>1</FileType>
               <FilePath>..\hal\src\hal_uart.c</FilePath>
             </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>Drivers</GroupName>
-          <Files>
-            <File>
-              <FileName>button.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\drivers\src\button.c</FilePath>
-            </File>
             <File>
               <FileName>ina219.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\drivers\src\ina219.c</FilePath>
+              <FilePath>..\hal\src\ina219.c</FilePath>
             </File>
             <File>
               <FileName>oled.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\drivers\src\oled.c</FilePath>
+              <FilePath>..\hal\src\oled.c</FilePath>
             </File>
             <File>
               <FileName>relay.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\drivers\src\relay.c</FilePath>
+              <FilePath>..\hal\src\relay.c</FilePath>
             </File>
           </Files>
         </Group>

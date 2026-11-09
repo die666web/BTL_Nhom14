@@ -38,7 +38,7 @@ for k,v in [('interw','1'),('Optim','2'),('oTime','0'),('SplitLS','0'),('OneElfS
 controls=sub(cads,'VariousControls')
 sub(controls,'MiscControls','-std=c11 -Wall -Wextra -Werror -ffunction-sections -fdata-sections')
 sub(controls,'Define','STM32F10X_MD');sub(controls,'Undefine','')
-includes=['.','bsp','hal/inc','drivers/inc','app/inc','middlewares/FreeRTOS-Kernel/include','middlewares/FreeRTOS-Kernel/portable/GCC/ARM_CM3']
+includes=['.','bsp','hal/inc','app/inc','middlewares/FreeRTOS-Kernel/include','middlewares/FreeRTOS-Kernel/portable/GCC/ARM_CM3']
 sub(controls,'IncludePath',';'.join('..' if s=='.' else '..\\'+s.replace('/','\\') for s in includes))
 ld=sub(arm,'LDads')
 for k,v in [('umfTarg','0'),('Ropi','0'),('Rwpi','0'),('noStLib','0'),('RepFail','1'),('useFile','1'),('TextAddressRange','0x08000000'),('DataAddressRange','0x20000000'),('pXoBase',''),('ScatterFile','.\\STM32F103C8.sct'),('IncludeLibs',''),('IncludeLibsPath',''),('Misc','--entry=Reset_Handler --strict'),('LinkerInputFile',''),('DisabledWarnings','')]:sub(ld,k,v)

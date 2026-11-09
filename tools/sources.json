@@ -7,17 +7,15 @@
     "bsp/bsp.c"
   ],
   "HAL": [
+    "hal/src/button.c",
     "hal/src/hal_dma.c",
     "hal/src/hal_gpio.c",
     "hal/src/hal_i2c.c",
     "hal/src/hal_rcc.c",
-    "hal/src/hal_uart.c"
-  ],
-  "Drivers": [
-    "drivers/src/button.c",
-    "drivers/src/ina219.c",
-    "drivers/src/oled.c",
-    "drivers/src/relay.c"
+    "hal/src/hal_uart.c",
+    "hal/src/ina219.c",
+    "hal/src/oled.c",
+    "hal/src/relay.c"
   ],
   "Application": [
     "app/src/app_ipc.c",
