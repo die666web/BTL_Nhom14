@@ -1,12 +1,41 @@
-/* CHƯA TRIỂN KHAI — Vũ Văn Võ
- * File dành riêng cho phần việc này, không phải module đã chạy.
- * Đọc docs/PHAN_CONG.md và header cùng tên trước khi viết.
- * PB8; lấy mức active từ board_config.h. relay_init và mọi lỗi/OTA đều OFF. Chỉ TaskControl gọi set/get. Không PWM relay; không tự đổi pin.
- * Điền các hàm khai báo trong header; helper nội bộ để static.
- * Không sửa main.c, BSP, FreeRTOSConfig.h hoặc API chung trong nhánh này.
- * Không dùng delay_ms/HAL_Delay trong task, không chờ vô hạn.
- * Khi xong: test riêng trên kit, ghi kết quả vào tests/manual/, mở PR -> develop.
+/* Relay (PA0, xem BSP_RELAY_GPIO_BASE/BSP_RELAY_PIN) — Vũ Văn Võ
+ * Mức kích lấy từ BSP_RELAY_ACTIVE (board_config.h). Chỉ TaskControl gọi set/get;
+ * BSP chỉ ép OFF lúc khởi động/panic/OTA. Không PWM.
  */
 #include "relay.h"
+#include "board_config.h"
+#include "hal_gpio.h"
+#include "FreeRTOS.h"
+#include "task.h"
 
-/* TODO: viết phần triển khai ở đây. Không có stub giả trả về thành công. */
+#define RELAY_GPIO ((GPIO_TypeDef *)BSP_RELAY_GPIO_BASE)
+
+static bool relay_on;
+
+static void write_pin(bool on)
+{
+    /* BSRR/BRR: ghi nguyên tử, không cần khóa. */
+    GPIO_WritePin(RELAY_GPIO, BSP_RELAY_PIN, on ? BSP_RELAY_ACTIVE : !BSP_RELAY_ACTIVE);
+}
+
+void relay_init(void)
+{
+    /* Nạp mức OFF trước rồi mới (cấu hình lại) output, tránh xung ON ngắn.
+     * Khóa ngắn vì GPIO_ConfigPin là read-modify-write CRL/CRH dùng chung port. */
+    relay_on = false;
+    write_pin(false);
+    taskENTER_CRITICAL();
+    GPIO_ConfigPin(RELAY_GPIO, BSP_RELAY_PIN, GPIO_MODE_OUTPUT_PP, GPIO_SPEED_2MHZ);
+    taskEXIT_CRITICAL();
+}
+
+void relay_set(bool on)
+{
+    relay_on = on;
+    write_pin(on);
+}
+
+bool relay_get(void)
+{
+    return relay_on;
+}

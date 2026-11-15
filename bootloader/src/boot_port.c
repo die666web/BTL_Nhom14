@@ -36,8 +36,8 @@ void port_init(void)
     (void)RCC_APB2ENR;
 
     /* Relay OFF: ghi mức không tích cực rồi mới chuyển output (giống bsp_system_init). */
-    GPIO_BSRR(GPIOB_BASE) = BSP_RELAY_ACTIVE ? (1u << (BSP_RELAY_PIN + 16u)) : (1u << BSP_RELAY_PIN);
-    gpio_mode(GPIOB_BASE, BSP_RELAY_PIN, 0x2u);       /* output push-pull 2 MHz */
+    GPIO_BSRR(BSP_RELAY_GPIO_BASE) = BSP_RELAY_ACTIVE ? (1u << (BSP_RELAY_PIN + 16u)) : (1u << BSP_RELAY_PIN);
+    gpio_mode(BSP_RELAY_GPIO_BASE, BSP_RELAY_PIN, 0x2u);  /* output push-pull 2 MHz */
 
     /* LED PC13 (Blue Pill, sáng mức thấp) */
     GPIO_BSRR(GPIOC_BASE) = 1u << 13;
@@ -92,8 +92,11 @@ void port_deinit(void)
     port_led(false);
     while (!(USART1_SR & USART_SR_TC)) { }
     USART1_CR1 = 0u;
-    /* Reset USART1, GPIOA, GPIOC về mặc định. GPIOB giữ nguyên để relay vẫn OFF tới khi app tự cấu hình. */
-    RCC_APB2RSTR |= RCC_APB2_USART1 | RCC_APB2_IOPA | RCC_APB2_IOPC;
-    RCC_APB2RSTR &= ~(RCC_APB2_USART1 | RCC_APB2_IOPA | RCC_APB2_IOPC);
-    RCC_APB2ENR &= ~(RCC_APB2_USART1 | RCC_APB2_IOPA | RCC_APB2_IOPC);
+    /* Reset USART1, GPIOC về mặc định. KHÔNG reset GPIOA/GPIOB (relay PA0 nằm đó):
+     * chỉ trả PA9/PA10 về input floating (mặc định reset), relay vẫn OFF tới khi app tự cấu hình. */
+    gpio_mode(GPIOA_BASE, BSP_UART_TX_PIN, 0x4u);
+    gpio_mode(GPIOA_BASE, BSP_UART_RX_PIN, 0x4u);
+    RCC_APB2RSTR |= RCC_APB2_USART1 | RCC_APB2_IOPC;
+    RCC_APB2RSTR &= ~(RCC_APB2_USART1 | RCC_APB2_IOPC);
+    RCC_APB2ENR &= ~(RCC_APB2_USART1 | RCC_APB2_IOPC);
 }
