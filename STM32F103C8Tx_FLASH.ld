@@ -1,6 +1,7 @@
 ENTRY(Reset_Handler)
 
-/* STM32F103C8T6:
+/* APPLICATION sau bootloader: 0x08002000, 55 KiB. Khớp common/ota_frame/ota_layout.h.
+ * STM32F103C8T6:
  * Flash: 64 KB
  * RAM:   20 KB
  */
@@ -12,7 +13,7 @@ _Min_Stack_Size = 0x400; /* 1 KB */
 
 MEMORY
 {
-    FLASH (rx)  : ORIGIN = 0x08000000, LENGTH = 64K
+    FLASH (rx)  : ORIGIN = 0x08002000, LENGTH = 55K /* 0xDC00, tới 0x0800FC00 (metadata) */
     RAM   (rwx) : ORIGIN = 0x20000000, LENGTH = 20K
 }
 

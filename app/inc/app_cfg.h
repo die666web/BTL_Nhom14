@@ -8,7 +8,7 @@
 #define APP_ENABLE_MEASURE  0
 #define APP_ENABLE_CONTROL  0
 #define APP_ENABLE_DISPLAY  0
-#define APP_ENABLE_COMM     0
+#define APP_ENABLE_COMM     1   /* OTA: nhận ENTER_UPDATE từ ESP32 */
 #define APP_VERSION         "0.1.0-scaffold"
 #define APP_MEASURE_PERIOD_MS 200U
 #define APP_CONTROL_PERIOD_MS  20U

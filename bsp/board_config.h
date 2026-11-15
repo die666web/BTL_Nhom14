@@ -5,7 +5,7 @@
  * If clock changes, update UART BRR, timer prescaler and FreeRTOS together. */
 #define BSP_CPU_CLOCK_HZ       8000000UL
 #define BSP_APB2_CLOCK_HZ      BSP_CPU_CLOCK_HZ
-#define BSP_UART_BAUD          9600UL
+#define BSP_UART_BAUD          115200UL /* OTA v1: phải khớp bootloader (boot_port.c) và ESP32 */
 #define BSP_I2C_SCL_PIN        6U  /* PB6 */
 #define BSP_I2C_SDA_PIN        7U  /* PB7; external pull-ups to 3.3 V */
 #define BSP_RELAY_PIN          8U  /* PB8 */
