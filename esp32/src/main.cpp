@@ -6,6 +6,7 @@
 #include <LittleFS.h>
 #include "web_ota.h"
 #include "uart_bridge.h"
+#include "debug_console.h"
 
 #if __has_include("secrets.h")
 #include "secrets.h"
@@ -66,4 +67,5 @@ void loop()
 {
     web_ota_loop();
     uart_bridge_loop();
+    debug_console_loop();
 }

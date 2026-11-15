@@ -142,3 +142,19 @@ Khi chạy trên board, ghi kết quả + log vào `tests/manual/MANH.md`.
 - Không xác thực chữ ký (CRC chỉ phát hiện lỗi).
 - App chưa gửi version sau khi khởi động; "thành công" = có ACK(END).
 - Timeout 100 ms cho DATA chưa đo trên board, chỉnh nếu thấy retry nhiều trong log.
+
+## 10. Công cụ test từ máy tính (`tools/ota_test.py`)
+Chạy bằng Python có pyserial (Windows: `~/.platformio/penv/Scripts/python.exe`, Linux: `pip install pyserial`).
+
+| Lệnh | Dùng để |
+|---|---|
+| `python tools/ota_test.py make-bin test.bin --size 1001` | Tạo app.bin **giả** hợp lệ (chỉ để test truyền, KHÔNG nạp vào STM32 thật — xem cảnh báo) |
+| `python tools/ota_test.py http-put build/gcc/firmware.bin [--flash]` | Máy đang vào Wi-Fi ESP32: upload như trình duyệt, in thời gian từng bước, theo dõi `/status` |
+| `python tools/ota_test.py serial-put COM5 firmware.bin [--flash]` | Upload qua cáp USB của ESP32 (không cần Wi-Fi), dùng console `put`/`flash` |
+| `python tools/ota_test.py fake-stm32 COM6 [--fail-every 4]` | Giả lập STM32 trên USB-UART nối GPIO17/GPIO16, thử retry khi bỏ frame |
+
+Console USB của ESP32 (115200): `help`, `ls`, `status`, `put <size>`, `flash`.
+
+> **Cảnh báo:** `--flash` với file từ `make-bin` mà ESP32 đang nối STM32 thật sẽ commit một app giả hợp lệ CRC/vector.
+> Bootloader sẽ nhảy vào app đó ở mọi lần khởi động và STM32 không nhận ENTER_UPDATE nữa → phải nạp lại bằng ST-Link
+> (`make flash`, hoặc xoá page metadata 0x0800FC00 để bootloader ở lại chờ nạp).
