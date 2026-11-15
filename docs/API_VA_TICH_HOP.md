@@ -30,7 +30,7 @@ Mã không phụ thuộc đường dẫn CMSIS bên ngoài như Makefile cũ.
 | GPIO_ConfigPin/RCC | Khởi tạo trước scheduler, không đổi pin/clock từ các task |
 | Cấu hình RTOS/build | Mạnh giữ, hai compiler dùng cùng source |
 
-UART hiện 9600 baud theo thư viện gốc. Có thể tăng khi test OTA, đổi một chỗ ở BSP và đồng bộ ESP32.
+UART 115200 baud (OTA v1). Đổi thì đổi cùng lúc `BSP_UART_BAUD`, `BOOT_UART_BAUD` (bootloader/src/boot_port.c) và `OTA_UART_BAUD` (esp32/src/uart_bridge.cpp).
 `HAL_OK` của write = đã vào queue; chưa bảo đảm bit cuối ra dây. Timeout có thể đã gửi một phần:
 giao thức phải có length/CRC/ACK/retry, không coi lỗi là chưa gửi byte nào.
 Không truyền `portMAX_DELAY`; không gọi UART task API từ ISR hay trước scheduler.

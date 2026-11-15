@@ -1,10 +1,24 @@
 #ifndef BOOT_PROTOCOL_H
 #define BOOT_PROTOCOL_H
+/* Máy trạng thái bootloader theo docs/OTA_CONTRACT.md mục 5:
+ *   WAIT_BEGIN -> RECEIVING -> COMPLETE_GRACE -> (chạy app)
+ * Không chặn: main gọi boot_protocol_poll() liên tục. */
 #include <stdbool.h>
 #include <stdint.h>
-#include <stddef.h>
-/* API đã thống nhất. Người phụ trách: Lê Trọng Mạnh.
- * Nhận gói UART có length/sequence/CRC, timeout và ACK/NACK. Dùng chung đặc tả docs/OTA_CONTRACT.md với ESP32. Không phụ thuộc FreeRTOS app.
- * Thay đổi API: trao đổi leader trước khi sửa. */
-void boot_protocol_run(void);
+
+typedef enum {
+    BOOT_ST_WAIT_BEGIN = 0,
+    BOOT_ST_RECEIVING,
+    BOOT_ST_COMPLETE_GRACE,
+    BOOT_ST_RUN_APP
+} boot_state_t;
+
+#define BOOT_SESSION_TIMEOUT_MS 15000u
+#define BOOT_GRACE_MS            2000u
+
+/* Vào WAIT_BEGIN và gửi READY. */
+void         boot_protocol_init(void);
+void         boot_protocol_poll(void);
+boot_state_t boot_protocol_state(void);
+
 #endif

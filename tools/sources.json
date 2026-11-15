@@ -25,6 +25,9 @@
     "app/src/task_display.c",
     "app/src/task_measure.c"
   ],
+  "Common": [
+    "common/ota_frame/ota_frame.c"
+  ],
   "FreeRTOS": [
     "middlewares/FreeRTOS-Kernel/tasks.c",
     "middlewares/FreeRTOS-Kernel/list.c",

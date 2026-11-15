@@ -22,13 +22,14 @@ Project Keil không dùng ARM Compiler 5. Compiler 6 dùng được cùng port G
 - Có sẵn: startup, linker, GPIO/RCC/DMA, UART đã sửa, FreeRTOS V11.1.0, IPC, hook lỗi, pin map,
   cấu hình task, Makefile, project Keil, quy trình Git và bảng giao việc.
 - I2C1 (`hal_i2c`) đã viết: thư viện chung cho mọi thiết bị trên bus, biên dịch sạch, **chưa test trên kit**.
-- Chưa làm: INA219, OLED, relay/button driver, bốn task, bootloader và ESP32 web OTA.
-- Mặc định cả bốn `APP_ENABLE_* = 0`: chỉ chạy idle/timer của FreeRTOS, relay OFF theo cấu hình;
-  chưa đo, chưa hiển thị, chưa nhận lệnh sản phẩm, chưa OTA. UART nền đã khởi tạo.
+- OTA v1 (bootloader + ESP32 web OTA + TaskComm nhận ENTER_UPDATE) đã viết, **chưa build/test trên kit**: `docs/OTA_WORKFLOW.md`.
+- Chưa làm: INA219, relay/button driver, các task còn lại.
+- Mặc định chỉ `APP_ENABLE_COMM = 1` (OTA), các task khác = 0: relay OFF theo cấu hình;
+  chưa đo, chưa hiển thị, chưa nhận lệnh sản phẩm. TaskComm chỉ xử lý ENTER_UPDATE.
 - Bật một task khi chưa viết hàm `task_*_create()` sẽ lỗi link; đây là dấu hiệu chưa hoàn thành,
   không “sửa” bằng hàm rỗng trả `pdPASS`.
-- Firmware hiện tại chạy độc lập tại **0x08000000**, Flash **64 KiB**, RAM **20 KiB**.
-  Chưa phân vùng OTA; chưa được nạp như ứng dụng nằm sau bootloader.
+- Flash: bootloader **0x08000000** (8 KiB), app **0x08002000** (55 KiB), metadata 0x0800FC00; RAM **20 KiB**.
+  App phải được nạp sau bootloader (`make flash-boot` rồi `make flash`, hoặc qua ESP32).
 - Relay tạm giả định **active-low**, nút PA0 nối GND/pull-up. Xác nhận relay và OLED thực tế trước khi đấu tải.
 
 ## Thư mục và quyền sửa
@@ -42,7 +43,7 @@ Project Keil không dùng ARM Compiler 5. Compiler 6 dùng được cùng port G
 | `main.c`, `startup.c`, `FreeRTOSConfig.h` | Tích hợp chung; chỉ Mạnh sửa |
 | `keil/` | Project Compiler 6 và scatter file; không chứa bản sao source |
 | `tools/` | Một manifest nguồn cho Make + Keil; leader quản lý |
-| `bootloader/`, `esp32/` | Khung riêng cho OTA, chưa có target chạy; Mạnh |
+| `bootloader/`, `esp32/`, `common/ota_frame/` | OTA v1: bootloader, ESP32 web OTA, codec dùng chung; Mạnh |
 | `extras/legacy/` | SPI, PWM TIM2, MAX7219 cũ: giữ tham khảo, không build mặc định |
 | `docs/`, `tests/manual/` | API, Git, test từng người, bằng chứng kiểm thử |
 
