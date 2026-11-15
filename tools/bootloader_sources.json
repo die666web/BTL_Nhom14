@@ -1,0 +1,16 @@
+{
+  "Core": [
+    "bootloader/src/main.c",
+    "startup.c"
+  ],
+  "Bootloader": [
+    "bootloader/src/boot_port.c",
+    "bootloader/src/boot_flash.c",
+    "bootloader/src/boot_validate.c",
+    "bootloader/src/boot_protocol.c",
+    "bootloader/src/boot_jump.c"
+  ],
+  "Common": [
+    "common/ota_frame/ota_frame.c"
+  ]
+}

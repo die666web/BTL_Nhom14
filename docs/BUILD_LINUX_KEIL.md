@@ -17,14 +17,14 @@ make -j4
 
 Kết quả ở `build/gcc/firmware.elf`, `.bin`, `.hex`, `.map`.
 Dùng toolchain riêng: `make CROSS_COMPILE=/duong/dan/bin/arm-none-eabi-`.
-Lệnh `make flash` ghi **0x08000000** bằng ST-Link; chỉ dùng cho bản standalone này.
+OTA v1: `make flash-boot` ghi bootloader ở **0x08000000**; `make flash` ghi app ở **0x08002000** kèm metadata ở 0x0800FC00. Chi tiết: `docs/OTA_WORKFLOW.md`.
 Muốn debug dùng ELF với GDB/OpenOCD hoặc IDE bạn đã cấu hình; không commit đường dẫn máy riêng.
 
 ## Windows — Keil µVision 5 / ARM Compiler 6
 
 1. Giải nén hoặc clone repo. Mở **`keil/MCU_Project.uvprojx`**.
 2. Trong Pack Installer cài **Keil STM32F1xx_DFP** nếu máy chưa có hỗ trợ chip.
-   Target Device là **STM32F103C8**, RAM 0x20000000/0x5000, ROM 0x08000000/0x10000.
+   Target Device là **STM32F103C8**, RAM 0x20000000/0x5000, ROM app 0x08002000/0xDC00 (`keil/Bootloader.uvprojx`: 0x08000000/0x2000).
 3. Options for Target → Target → ARM Compiler: chọn **Use default compiler version 6**
    hoặc Compiler 6 đã cài. **Không dùng ARM Compiler 5. Tắt Use MicroLIB.**
 4. Giữ custom scatter `keil/STM32F103C8.sct`, không bật auto memory layout thay nó.
@@ -65,12 +65,12 @@ Script ghi lại project đã sinh; chỉnh thiết lập chung thì sửa scrip
 
 ## Bộ nhớ và OTA
 
-Cả hai linker hiện cho application độc lập 64 KiB Flash / 20 KiB RAM, dự phòng C heap 512B,
+App linker (GCC + Keil) đặt application ở 0x08002000, 55 KiB Flash / 20 KiB RAM, dự phòng C heap 512B,
 main/ISR stack 1 KiB. FreeRTOS heap 10 KiB nằm trong `.bss` và khác C heap.
 GCC tự copy `.data`/zero `.bss`; ARM Compiler 6 gọi `__main` để scatter-load rồi vào `main`.
 Chưa build C++, constructors cho GCC startup chưa được hỗ trợ; ESP32 là project tách riêng.
-Khi OTA được triển khai phải thêm target/linker bootloader + application có offset cho **cả hai** môi trường,
-VTOR và địa chỉ nạp đồng bộ. Không sửa duy nhất một file linker.
+Bootloader có linker riêng (`bootloader/STM32F103C8_BOOT.ld`, `keil/Bootloader.sct`, 8 KiB). Layout chung nằm ở
+`common/ota_frame/ota_layout.h`; đổi layout thì sửa đồng bộ mọi file linker, không sửa duy nhất một file.
 
 ## Tham chiếu kỹ thuật
 

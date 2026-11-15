@@ -1,7 +1,8 @@
-; Standalone application ONLY. 64 KiB Flash, 20 KiB RAM.
+; APPLICATION sau bootloader: Flash 0x08002000, 55 KiB (tới 0x0800FC00 = metadata), RAM 20 KiB.
+; Khớp common/ota_frame/ota_layout.h. Bảng vector phải nằm đầu ảnh (startup.o +First).
 ; ARM Compiler 6 full C runtime (__main). Do not enable MicroLIB.
-LR_IROM1 0x08000000 0x00010000 {
-  ER_IROM1 0x08000000 0x00010000 {
+LR_IROM1 0x08002000 0x0000DC00 {
+  ER_IROM1 0x08002000 0x0000DC00 {
     startup.o (.isr_vector, +First)
     *(InRoot$$Sections)
     .ANY (+RO)
