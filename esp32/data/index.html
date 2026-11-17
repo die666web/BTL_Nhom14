@@ -205,6 +205,10 @@ $('up').onclick = () => {
     done();
   };
   x.onerror = () => { setBar(100, 'err'); msg($('upmsg'), 'Mất kết nối khi tải lên', false); log('Mất kết nối'); done(); };
+  /* Không chờ mãi: ESP32 không trả lời trong 60 s thì báo lỗi */
+  x.timeout = 60000;
+  x.ontimeout = () => { setBar(100, 'err'); msg($('upmsg'), 'ESP32 không trả lời sau 60 s (xem log USB của ESP32)', false); log('Upload quá thời gian'); done(); };
+  x.open('POST', '/upload');
   x.send(fd);
 };
 
@@ -225,6 +229,7 @@ $('flash').onclick = async () => {
 /* ---- trạng thái ---- */
 let online = null;
 async function refresh() {
+  if (busy) return;                        /* đang upload: không mở thêm kết nối tới ESP32 */
   try {
     const s = await (await fetch('/status', { cache: 'no-store' })).json();
     if (online !== true) { online = true; log('Đã kết nối ESP32'); }
