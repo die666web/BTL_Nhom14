@@ -55,11 +55,21 @@ $(BUILD)/meta.bin: $(TARGET).bin tools/make_meta.py
 	$(PYTHON) tools/make_meta.py $< $@
 flash-boot: $(BOOT_TARGET).bin
 	st-flash --reset write $< 0x08000000
+# App thử OTA: cùng thư viện với app thật nhưng main chỉ bật LED PC13 + TaskComm (vẫn OTA lại được).
+# Upload build/gcc/ota_led_test.bin lên web ESP32. Không thuộc 'all'.
+LED_TARGET := $(BUILD)/ota_led_test
+LED_OBJS := $(filter-out $(BUILD)/main.o,$(OBJS)) $(BUILD)/tests/ota_led/main_led.o
+ota-led: $(LED_TARGET).bin
+$(LED_TARGET).elf: $(LED_OBJS) $(LDSCRIPT)
+	$(CC) $(LED_OBJS) $(subst $(TARGET).map,$(LED_TARGET).map,$(LDFLAGS)) -o $@
+	$(SIZE) $@
+$(LED_TARGET).bin: $(LED_TARGET).elf
+	$(OBJCOPY) -O binary $< $@
 sync-projects:
 	$(PYTHON) tools/sync_projects.py
 check-projects:
 	$(PYTHON) tools/sync_projects.py --check
 clean:
 	rm -rf build/gcc build/gcc-boot
--include $(OBJS:.o=.d) $(BOOT_OBJS:.o=.d)
-.PHONY: all boot flash flash-boot clean sync-projects check-projects
+-include $(OBJS:.o=.d) $(BOOT_OBJS:.o=.d) $(BUILD)/tests/ota_led/main_led.d
+.PHONY: all boot flash flash-boot ota-led clean sync-projects check-projects

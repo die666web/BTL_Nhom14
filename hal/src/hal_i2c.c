@@ -253,7 +253,7 @@ static hal_status_t read_bytes(uint8_t *data, size_t length,
     return HAL_OK;
 }
 
-/* Ghi: [prefix nếu có] + data, kết thúc bằng STOP. Dùng chung cho write/mem_write/is_ready. */
+/* Ghi: [prefix nếu có] + data, kết thúc bằng STOP. Dùng chung cho mem_write và is_ready. */
 static hal_status_t write_transfer(uint8_t addr7, const uint8_t *prefix,
                                    const uint8_t *data, size_t length, TickType_t timeout)
 {
@@ -292,28 +292,10 @@ hal_status_t hal_i2c_is_ready(uint8_t addr7, TickType_t timeout)
     return write_transfer(addr7, NULL, NULL, 0U, timeout);
 }
 
-hal_status_t hal_i2c_write(uint8_t addr7, const uint8_t *data, size_t length, TickType_t timeout)
-{
-    if (addr7 > 0x7FU || !data || length == 0U) return HAL_INVALID_ARGUMENT;
-    return write_transfer(addr7, NULL, data, length, timeout);
-}
-
 hal_status_t hal_i2c_mem_write(uint8_t addr7, uint8_t reg, const uint8_t *data, size_t length, TickType_t timeout)
 {
     if (addr7 > 0x7FU || (!data && length)) return HAL_INVALID_ARGUMENT;
     return write_transfer(addr7, &reg, data, length, timeout);
-}
-
-hal_status_t hal_i2c_read(uint8_t addr7, uint8_t *data, size_t length, TickType_t timeout)
-{
-    TickType_t start;
-    if (addr7 > 0x7FU || !data || length == 0U) return HAL_INVALID_ARGUMENT;
-    hal_status_t status = begin(timeout, &start);
-    if (status != HAL_OK) return status;
-
-    status = read_start(addr7, start, timeout);
-    if (status == HAL_OK) status = read_bytes(data, length, start, timeout);
-    return end(status);
 }
 
 hal_status_t hal_i2c_mem_read(uint8_t addr7, uint8_t reg, uint8_t *data, size_t length, TickType_t timeout)

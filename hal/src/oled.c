@@ -1,15 +1,7 @@
-/* CHƯA TRIỂN KHAI — Vũ Chí Công
- * File dành riêng cho phần việc này, không phải module đã chạy.
- * Đọc docs/PHAN_CONG.md và header cùng tên trước khi viết.
- * Xác nhận IC/kích thước màn thực tế trước code (đề cương chưa chốt SSD1306). Dùng hal_i2c_write và timeout; font/UI nằm đây. Chỉ TaskDisplay sử dụng, không khóa g_i2c_mutex bên ngoài HAL.
- * Điền các hàm khai báo trong header; helper nội bộ để static.
- * Không sửa main.c, BSP, FreeRTOSConfig.h hoặc API chung trong nhánh này.
- * Không dùng delay_ms/HAL_Delay trong task, không chờ vô hạn.
- * Khi xong: test riêng trên kit, ghi kết quả vào tests/manual/, mở PR -> develop.
+/* SSD1306 128x64 qua I2C — Vũ Chí Công
+ * Framebuffer 1 KiB trong RAM, đẩy ra màn theo từng page 128 byte.
+ * Chỉ TaskDisplay gọi; mutex I2C do hal_i2c tự quản lý.
  */
-
-/* TODO: viết phần triển khai ở đây. Không có stub giả trả về thành công. */
-
 #include "oled.h"
 #include "hal_i2c.h"
 #include "board_config.h"
@@ -93,14 +85,26 @@ static hal_status_t oled_flush(void)
         return status;
     }
 
-    // Truyền 1024 byte pixel
-    return hal_i2c_mem_write(
-        BSP_OLED_ADDR7,
-        0x40,
-        oled_buffer,
-        sizeof(oled_buffer),
-        pdMS_TO_TICKS(200)
-    );
+    // Truyền 1024 byte pixel theo 8 lần x 128 byte (~12 ms/lần @100 kHz)
+    // để không giữ bus I2C ~90 ms liền làm INA219 hết timeout chờ mutex.
+    // Con trỏ GDDRAM của SSD1306 tự tăng giữa các transaction.
+    for (uint8_t page = 0; page < OLED_PAGES; page++)
+    {
+        status = hal_i2c_mem_write(
+            BSP_OLED_ADDR7,
+            0x40,
+            &oled_buffer[page * OLED_WIDTH],
+            OLED_WIDTH,
+            pdMS_TO_TICKS(50)
+        );
+
+        if (status != HAL_OK)
+        {
+            return status;
+        }
+    }
+
+    return HAL_OK;
 }
 
 

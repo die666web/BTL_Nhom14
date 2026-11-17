@@ -8,11 +8,14 @@
 #define BSP_UART_BAUD          115200UL /* OTA v1: phải khớp bootloader (boot_port.c) và ESP32 */
 #define BSP_I2C_SCL_PIN        6U  /* PB6 */
 #define BSP_I2C_SDA_PIN        7U  /* PB7; external pull-ups to 3.3 V */
-#define BSP_RELAY_PIN          8U  /* PB8 */
-#define BSP_BUTTON_PIN         0U  /* PA0, button to GND */
+/* Port dạng địa chỉ để dùng chung cho app và bootloader (GPIOA 0x40010800, GPIOB 0x40010C00). */
+#define BSP_RELAY_GPIO_BASE    0x40010800UL /* GPIOA */
+#define BSP_RELAY_PIN          0U  /* PA0 */
+#define BSP_BUTTON_GPIO_BASE   0x40010C00UL /* GPIOB */
+#define BSP_BUTTON_PIN         8U  /* PB8, button to GND */
 #define BSP_BUTTON_ACTIVE      0U
-/* ASSUMPTION: active-low relay. Confirm with module BEFORE connecting fan. */
-#define BSP_RELAY_ACTIVE       0U
+/* Module relay kích mức CAO (đã xác nhận): PA0 = 1 -> relay đóng, PA0 = 0 -> nhả. */
+#define BSP_RELAY_ACTIVE       1U
 #define BSP_UART_TX_PIN        9U  /* PA9 */
 #define BSP_UART_RX_PIN       10U  /* PA10 */
 #define BSP_INA219_ADDR7       0x40U /* confirm A0/A1 */

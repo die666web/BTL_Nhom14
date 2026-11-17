@@ -5,9 +5,9 @@
 
 /* Leader enables a task only after its implementation is merged and tested.
  * No dummy task returns success. Enabling an empty module causes a link error. */
-#define APP_ENABLE_MEASURE  0
-#define APP_ENABLE_CONTROL  0
-#define APP_ENABLE_DISPLAY  0
+#define APP_ENABLE_MEASURE  1   /* INA219 -> mailbox */
+#define APP_ENABLE_CONTROL  1   /* relay PB8 + nút PA0 */
+#define APP_ENABLE_DISPLAY  1   /* SSD1306 OLED */
 #define APP_ENABLE_COMM     1   /* OTA: nhận ENTER_UPDATE từ ESP32 */
 #define APP_VERSION         "0.1.0-scaffold"
 #define APP_MEASURE_PERIOD_MS 200U
