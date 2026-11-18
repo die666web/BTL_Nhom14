@@ -11,6 +11,5 @@ typedef struct {
     bool valid;       /* false on missing sensor; do not display stale data as valid */
 } app_measurement_t;
 
-typedef enum { APP_CMD_OFF = 0, APP_CMD_ON, APP_CMD_TOGGLE, APP_CMD_ENTER_OTA } app_command_t;
 typedef struct { bool relay_on; bool ota_locked; } app_control_state_t;
 #endif

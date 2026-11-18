@@ -5,7 +5,7 @@
  *   2. Chờ Control tắt relay và set OFF_ACK (có hạn). Control chưa bật/không trả lời: BSP vẫn ép relay OFF.
  *   3. Ghi cờ BKP_DR1 rồi software reset -> bootloader gửi READY.
  * Các frame khác bị bỏ qua trong app. Không log text trên UART này.
- * TODO (nếu cần): lệnh sản phẩm (ON/OFF, đọc version) nên dùng cùng khung frame, TYPE riêng. */
+ * Không có điều khiển relay từ xa: relay chỉ bật/tắt bằng nút (TaskControl). */
 #include "task_comm.h"
 #include "app_cfg.h"
 #include "app_ipc.h"
