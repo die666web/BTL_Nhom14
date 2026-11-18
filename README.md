@@ -34,7 +34,7 @@ bằng nút nhấn hoặc lệnh UART. ESP32 làm web server để cập nhật 
 ```
 TaskMeasure (200 ms) --g_measurement_queue--> TaskDisplay (400 ms) --> OLED
 TaskControl (20 ms)  --g_control_queue------> TaskDisplay
-TaskComm (UART)      --g_command_queue------> TaskControl --> relay
+Nút PB8 --> TaskControl --> relay (không có điều khiển relay từ xa)
 TaskComm nhận ENTER_UPDATE --> TaskControl tắt relay --> reset vào bootloader --> nhận firmware mới
 ```
 

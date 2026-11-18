@@ -13,7 +13,6 @@
 #define APP_MEASURE_PERIOD_MS 200U
 #define APP_CONTROL_PERIOD_MS  20U
 #define APP_DISPLAY_PERIOD_MS 400U
-#define APP_COMMAND_QUEUE_LEN   8U
 #define APP_UART_RX_QUEUE_LEN 128U
 /* Stack sizes in 32-bit words; initial budgets, measure high-water marks on kit. */
 #define APP_MEASURE_STACK 256U

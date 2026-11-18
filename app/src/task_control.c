@@ -1,9 +1,8 @@
 /* TaskControl — Vũ Văn Võ
- * Chu kỳ 20 ms: nút PA0 (chống dội), lệnh từ g_command_queue, điều khiển relay PB8,
+ * Chu kỳ 20 ms: nút PB8 (chống dội), điều khiển relay PA0,
  * publish app_control_state_t qua g_control_queue (overwrite).
- * OTA ưu tiên tuyệt đối (docs/API_VA_TICH_HOP.md): thấy APP_EVENT_OTA_REQUEST hoặc lệnh
- * APP_CMD_ENTER_OTA -> khóa, relay OFF, cập nhật mailbox, rồi mới set APP_EVENT_RELAY_OFF_ACK.
- * Khi đã khóa, bỏ qua mọi yêu cầu bật (nút, ON, TOGGLE). Không delay bận, không chờ vô hạn.
+ * OTA ưu tiên tuyệt đối (docs/API_VA_TICH_HOP.md): thấy APP_EVENT_OTA_REQUEST -> khóa, relay OFF, cập nhật mailbox, rồi mới set APP_EVENT_RELAY_OFF_ACK.
+ * Khi đã khóa, bỏ qua mọi yêu cầu bật từ nút. Không delay bận, không chờ vô hạn.
  */
 #include "task_control.h"
 #include "app_cfg.h"
@@ -35,18 +34,6 @@ static void prvControlTask(void *argument)
     for (;;) {
         bool want_on = state.relay_on;
         bool lock = state.ota_locked || ota_requested();
-
-        /* Lệnh từ TaskComm: đọc hết hàng đợi, không chờ. */
-        app_command_t cmd;
-        while (xQueueReceive(g_command_queue, &cmd, 0) == pdPASS) {
-            switch (cmd) {
-            case APP_CMD_OFF:       want_on = false; break;
-            case APP_CMD_ON:        want_on = true; break;
-            case APP_CMD_TOGGLE:    want_on = !want_on; break;
-            case APP_CMD_ENTER_OTA: lock = true; break;
-            default:                break;
-            }
-        }
 
         /* Luôn poll nút để bộ chống dội theo kịp, kể cả khi đang khóa. */
         if (button_poll_pressed()) want_on = !want_on;

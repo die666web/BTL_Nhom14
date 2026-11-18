@@ -10,8 +10,8 @@ Không có yêu cầu giọng nói, PWM tốc độ hay LCD1602 trong bản đ�
 |---|---|---|
 | `hal/src/relay.c` | **Đã viết, có test PC.** `relay_init/set/get`, mức active từ BSP | Khởi động OFF; ON/OFF đúng trên kit |
 | `hal/src/button.c` | **Đã viết, có test PC.** `button_init/poll_pressed`, chống dội 3 mẫu x 20 ms | Mỗi nhấn một sự kiện; giữ nút không lặp |
-| `app/src/task_control.c` | **Đã viết.** Chu kỳ 20ms, nút + queue lệnh, publish trạng thái, khóa relay khi OTA | Đọc nút/ON/OFF; OTA ưu tiên tắt và khóa relay; chỉ ACK sau OFF |
-| `tests/manual/VO.md` | Cách nối, bước thử, kết quả, ảnh/log | Có test giữ nút, dội, lệnh queue, OTA đang ON |
+| `app/src/task_control.c` | **Đã viết.** Chu kỳ 20ms, nút nhấn, publish trạng thái, khóa relay khi OTA | Đọc nút; OTA ưu tiên tắt và khóa relay; chỉ ACK sau OFF |
+| `tests/manual/VO.md` | Cách nối, bước thử, kết quả, ảnh/log | Có test giữ nút, dội, OTA đang ON |
 
 Header tương ứng ở `hal/inc/` và `app/inc/` đã chốt; không tự đổi chữ ký hàm.
 **Không viết lại GPIO, RCC, UART; không sửa main, startup, FreeRTOSConfig.**
@@ -39,7 +39,7 @@ Nhánh: `feature/oled`, sau đó `feature/task-display`.
 | `hal/src/hal_i2c.c` | **Đã viết, chờ test kit.** I2C1 100 kHz polling; mutex trong từng transaction, timeout, NACK, recovery 9 xung SCL |
 | `hal/src/ina219.c` | **Đã viết.** Calibration theo shunt; đọc U/I, báo lỗi/overflow |
 | `app/src/task_measure.c` | **Đã viết.** Chu kỳ 200ms, lọc, P=U*I, publish valid/timestamp |
-| `app/src/task_comm.c` | Parser UART, lệnh queue, version, OTA REQUEST/OFF_ACK |
+| `app/src/task_comm.c` | Parser UART, OTA REQUEST/OFF_ACK |
 | `bootloader/src/main.c` | Entry point bootloader độc lập, giữ relay OFF |
 | `bootloader/src/boot_protocol.c` | Packet, sequence, CRC, ACK/NACK, timeout |
 | `bootloader/src/boot_flash.c` | Kiểm tra biên, erase/program/verify |

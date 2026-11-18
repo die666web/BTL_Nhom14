@@ -41,7 +41,6 @@ UART queue dùng API FromISR và IRQ priority 6 (numerical >=5). Không đổi p
 
 - `g_measurement_queue`: 1 phần tử `app_measurement_t`; producer overwrite, reader peek.
 - `g_control_queue`: 1 phần tử `app_control_state_t`; producer overwrite, reader peek.
-- `g_command_queue`: 8 phần tử enum `app_command_t`; Comm gửi có timeout, báo lỗi khi đầy.
 - `valid=false` và timestamp bảo đảm Display không giả vờ số đo cũ còn hợp lệ.
 - Đơn vị nội bộ V/A/W; chỉ UI chuyển A → mA. Current có thể âm.
 - Mỗi task gọi hàm init thiết bị của nó (`ina219_init`, `oled_init`...) một lần khi bắt đầu; I2C init chung ở main trước task.
@@ -49,13 +48,12 @@ UART queue dùng API FromISR và IRQ priority 6 (numerical >=5). Không đổi p
 ## OTA handshake cần triển khai trong hai task
 
 1. Comm clear `APP_EVENT_RELAY_OFF_ACK` cũ, set `APP_EVENT_OTA_REQUEST`.
-2. Control kiểm tra REQUEST ưu tiên trước mọi ON/TOGGLE/nút; đặt khóa OTA, relay OFF,
+2. Control kiểm tra REQUEST ưu tiên trước nút nhấn; đặt khóa OTA, relay OFF,
    cập nhật mailbox rồi set OFF_ACK. Khi đã khóa, bỏ qua mọi yêu cầu bật.
 3. Comm chờ OFF_ACK có timeout; chưa ACK thì không nhảy/reset.
 4. Leader triển khai request bootloader bền qua reset và quy tắc thoát trạng thái OTA.
 
 Không chờ ACK hoặc delay khi đang giữ mutex. Event ở đây dùng từ task, không từ ISR.
-`APP_CMD_ENTER_OTA` nếu parser sử dụng phải chuyển thành cùng trình tự event, không tạo lối đi bỏ qua ACK.
 
 ## Tạo task
 

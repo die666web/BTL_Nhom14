@@ -11,7 +11,6 @@
  * Do not Receive a display mailbox: other readers must keep seeing latest state. */
 extern QueueHandle_t g_measurement_queue; /* app_measurement_t; Measure -> Display */
 extern QueueHandle_t g_control_queue;     /* app_control_state_t; Control -> Display */
-extern QueueHandle_t g_command_queue;     /* app_command_t; Comm -> Control */
 extern SemaphoreHandle_t g_i2c_mutex;     /* acquired INSIDE hal_i2c_* per transaction */
 extern EventGroupHandle_t g_system_events;
 #define APP_EVENT_OTA_REQUEST (1U << 0)
