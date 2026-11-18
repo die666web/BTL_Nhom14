@@ -2,156 +2,216 @@
 #include "hal_gpio.h"
 #include "hal_rcc.h"
 #include "board_config.h"
-#include "app_cfg.h"
-#include "queue.h"
-#include "semphr.h"
-#include "task.h"
-#include <string.h>
 
-typedef struct {
-    volatile uint32_t SR, DR, BRR, CR1, CR2, CR3, GTPR;
-} uart_regs_t;
-#define USART1 ((uart_regs_t *)0x40013800UL)
-#define UART_LINE_SIZE 128U
-static QueueHandle_t rx_queue, tx_queue;
-static SemaphoreHandle_t tx_mutex;
-static volatile uint32_t rx_errors;
-static char line[UART_LINE_SIZE];
-static size_t line_used;
-static uint8_t line_discard;
+static volatile uint8_t rx_buffer[UART_BUFFER_SIZE];
+static volatile uint8_t rx_head = 0;
+static uint8_t line_index = 0;
+static volatile uint8_t rx_tail = 0;
 
-BaseType_t Config_uart(void)
+static volatile uint8_t tx_buffer[UART_BUFFER_SIZE];
+static volatile uint8_t tx_head = 0;
+static volatile uint8_t tx_tail = 0;
+
+static uint8_t UART_NextIndex(uint8_t index)
 {
-    if (rx_queue != NULL) return pdFAIL;
-    rx_queue = xQueueCreate(APP_UART_RX_QUEUE_LEN, sizeof(uint8_t));
-    tx_queue = xQueueCreate(128U, sizeof(uint8_t));
-    tx_mutex = xSemaphoreCreateMutex();
-    if (!rx_queue || !tx_queue || !tx_mutex) {
-        if (rx_queue) vQueueDelete(rx_queue);
-        if (tx_queue) vQueueDelete(tx_queue);
-        if (tx_mutex) vSemaphoreDelete(tx_mutex);
-        rx_queue = tx_queue = NULL; tx_mutex = NULL;
-        return pdFAIL;
+    index++;
+
+    if (index >= UART_BUFFER_SIZE)
+    {
+        index = 0;
     }
+
+    return index;
+}
+
+static uint8_t SendInterrupt_UART(uint8_t data)
+{
+    uint8_t next = UART_NextIndex(tx_head);
+
+    if (next == tx_tail)
+    {
+        return 0;
+    }
+
+    tx_buffer[tx_head] = data;
+    tx_head = next;
+
+    /* TXEIE: cho phep ngat khi thanh ghi phat trong. */
+    USART1->CR1 |= (1U << 7);
+
+    return 1;
+}
+
+void Config_uart(void)
+{
     RCC_EnableGPIOAClock();
     RCC_EnableUSART1Clock();
-    GPIO_ConfigPin(GPIOA, BSP_UART_TX_PIN, GPIO_MODE_AF_PP, GPIO_SPEED_50MHZ);
-    GPIO_ConfigPin(GPIOA, BSP_UART_RX_PIN, GPIO_MODE_INPUT_FLOATING, GPIO_SPEED_INPUT);
-    USART1->CR1 = 0U;
-    USART1->CR2 = 0U;
-    USART1->CR3 = 0U; /* interrupt TX, not DMA */
+
+    GPIO_ConfigPin(GPIOA, 9, GPIO_MODE_AF_PP, GPIO_SPEED_50MHZ);
+    GPIO_ConfigPin(GPIOA, 10, GPIO_MODE_INPUT_FLOATING, GPIO_SPEED_INPUT);
+
+    /* 8 MHz / 115200 = 69 (ESP32 va bootloader cung dung 115200). */
     USART1->BRR = (BSP_APB2_CLOCK_HZ + BSP_UART_BAUD / 2U) / BSP_UART_BAUD;
-    (void)USART1->SR; (void)USART1->DR;
-    /* IRQ37 priority 6 permits FromISR (max syscall priority = 5). */
-    ((volatile uint8_t *)0xE000E400UL)[37] = (6U << 4);
-    (*(volatile uint32_t *)0xE000E284UL) = (1UL << 5);
-    (*(volatile uint32_t *)0xE000E104UL) = (1UL << 5);
-    USART1->CR1 = (1U << 2) | (1U << 3) | (1U << 5) | (1U << 13);
-    return pdPASS;
+    USART1->CR1 |= (1U << 2) | (1U << 3) | (1U << 5) | (1U << 13);
+    NVIC_ISER1 = (1U << 5);    /* Enable USART1 IRQ 37 */
 }
 
-static TickType_t remaining(TickType_t start, TickType_t budget)
+void SendStringInterrupt_UART(const char *str)
 {
-    TickType_t elapsed = xTaskGetTickCount() - start;
-    return elapsed >= budget ? 0 : budget - elapsed;
-}
+    while (*str != '\0')
+    {
+        while (!SendInterrupt_UART((uint8_t)*str))
+        {
+        }
 
-static hal_status_t write_locked(const uint8_t *data, size_t length,
-                                  TickType_t start, TickType_t timeout)
-{
-    for (size_t i = 0; i < length; ++i) {
-        if (xQueueSend(tx_queue, &data[i], remaining(start, timeout)) != pdPASS)
-            return HAL_TIMEOUT;
-        taskENTER_CRITICAL();
-        USART1->CR1 |= (1U << 7);
-        taskEXIT_CRITICAL();
+        str++;
     }
-    return HAL_OK;
-}
 
-static hal_status_t write_message(const uint8_t *data, size_t length,
-                                  TickType_t timeout, uint8_t newline)
-{
-    if ((!data && length) || timeout == portMAX_DELAY) return HAL_INVALID_ARGUMENT;
-    if (!tx_mutex || xTaskGetSchedulerState() != taskSCHEDULER_RUNNING) return HAL_NOT_READY;
-    TickType_t start = xTaskGetTickCount();
-    if (xSemaphoreTake(tx_mutex, timeout) != pdPASS) return HAL_TIMEOUT;
-    hal_status_t status = write_locked(data, length, start, timeout);
-    if (status == HAL_OK && newline) {
-        const uint8_t lf = '\n';
-        status = write_locked(&lf, 1, start, timeout);
+    while (!SendInterrupt_UART('\n'))
+    {
     }
-    (void)xSemaphoreGive(tx_mutex);
-    return status;
 }
 
-hal_status_t hal_uart_write(const uint8_t *data, size_t length, TickType_t timeout)
-{ return write_message(data, length, timeout, 0); }
-
-hal_status_t hal_uart_read(uint8_t *out, TickType_t timeout)
+uint8_t ReceiveInterrupt_UART(uint8_t *out_data)
 {
-    if (!out || timeout == portMAX_DELAY) return HAL_INVALID_ARGUMENT;
-    if (!rx_queue || xTaskGetSchedulerState() != taskSCHEDULER_RUNNING) return HAL_NOT_READY;
-    return xQueueReceive(rx_queue, out, timeout) == pdPASS ? HAL_OK : HAL_TIMEOUT;
+    if (rx_tail == rx_head)
+    {
+        return 0;
+    }
+
+    *out_data = rx_buffer[rx_tail];
+    rx_tail = UART_NextIndex(rx_tail);
+
+    return 1;
 }
 
 void USART1_IRQHandler(void)
 {
-    BaseType_t wake = pdFALSE;
-    uint32_t status = USART1->SR;
-    if (status & ((1U << 5) | 0x0FU)) {
-        /* Read SR then DR clears RXNE and ORE/FE/NE/PE. Drop corrupt byte. */
-        uint8_t byte = (uint8_t)USART1->DR;
-        if (status & 0x0FU) ++rx_errors;
-        else if ((status & (1U << 5)) &&
-                 xQueueSendFromISR(rx_queue, &byte, &wake) != pdPASS) ++rx_errors;
-    }
-    if ((status & (1U << 7)) && (USART1->CR1 & (1U << 7))) {
-        uint8_t byte;
-        if (xQueueReceiveFromISR(tx_queue, &byte, &wake) == pdPASS) USART1->DR = byte;
-        else USART1->CR1 &= ~(1U << 7);
-    }
-    portYIELD_FROM_ISR(wake);
-}
+    /* TXE va TXEIE cung bang 1: gui byte tiep theo. */
+    if ((USART1->SR & (1U << 7)) &&
+        (USART1->CR1 & (1U << 7)))
+    {
+        if (tx_tail != tx_head)
+        {
+            USART1->DR = tx_buffer[tx_tail];
+            tx_tail = UART_NextIndex(tx_tail);
+        }
 
-uint32_t hal_uart_rx_error_count(void) { return rx_errors; }
-uint8_t ReceiveInterrupt_UART(uint8_t *out) { return hal_uart_read(out, 0) == HAL_OK; }
-hal_status_t SendTextInterrupt_UART(const char *text)
-{
-    if (!text) return HAL_INVALID_ARGUMENT;
-    return write_message((const uint8_t *)text, strlen(text), pdMS_TO_TICKS(1000), 0);
-}
-hal_status_t SendStringInterrupt_UART(const char *text)
-{
-    if (!text) return HAL_INVALID_ARGUMENT;
-    return write_message((const uint8_t *)text, strlen(text), pdMS_TO_TICKS(1000), 1);
-}
-hal_status_t SendNumberInterrupt_UART(uint8_t number)
-{
-    uint8_t digits[3]; size_t n = 0;
-    if (number >= 100U) digits[n++] = (uint8_t)('0' + number / 100U);
-    if (number >= 10U) digits[n++] = (uint8_t)('0' + (number / 10U) % 10U);
-    digits[n++] = (uint8_t)('0' + number % 10U);
-    return hal_uart_write(digits, n, pdMS_TO_TICKS(1000));
+        if (tx_tail == tx_head)
+        {
+            USART1->CR1 &= ~(1U << 7);
+        }
+    }
+
+    /* RXNE va RXNEIE cung bang 1: luu byte vao RX buffer. */
+    if ((USART1->SR & (1U << 5)) &&
+        (USART1->CR1 & (1U << 5)))
+    {
+        uint8_t receive = (uint8_t)USART1->DR;
+        uint8_t next = UART_NextIndex(rx_head);
+
+        if (next != rx_tail)
+        {
+            rx_buffer[rx_head] = receive;
+            rx_head = next;
+        }
+    }
 }
 
 uint8_t UART_ReadLine(char *buffer, uint8_t max_size)
 {
-    uint8_t byte;
-    if (!buffer || max_size < 2U) return 0;
-    while (ReceiveInterrupt_UART(&byte)) {
-        if (byte == '\r' || byte == '\n') {
-            uint8_t ready = !line_discard && line_used > 0 && line_used < max_size;
-            if (ready) { memcpy(buffer, line, line_used); buffer[line_used] = '\0'; }
-            line_used = 0; line_discard = 0;
-            if (ready) return 1;
-        } else if (!line_discard) {
-            if (line_used < sizeof(line) - 1U) line[line_used++] = (char)byte;
-            else line_discard = 1; /* discard entire overlong line */
-        }
+    uint8_t data;
+
+    if (!ReceiveInterrupt_UART(&data))
+    {
+        return 0;
     }
+
+    if (data == '\r' || data == '\n')
+    {
+        if (line_index == 0)
+        {
+            return 0;
+        }
+
+        buffer[line_index] = '\0';
+        line_index = 0;
+
+        return 1;
+    }
+
+    if (line_index < max_size - 1)
+    {
+        buffer[line_index++] = (char)data;
+    }
+    else
+    {
+        // Buffer đầy thì nhận lại từ đầu
+        line_index = 0;
+        buffer[0] = '\0';
+    }
+
     return 0;
 }
 
-uint8_t StringEqual(const char *a, const char *b)
-{ return a && b && strcmp(a, b) == 0; }
+uint8_t StringEqual(const char *s1, const char *s2)
+{
+    while (*s1 != '\0' && *s2 != '\0')
+    {
+        if (*s1 != *s2)
+        {
+            return 0;
+        }
+
+        s1++;
+        s2++;
+    }
+
+    return (*s1 == '\0' && *s2 == '\0');
+}
+
+void SendNumberInterrupt_UART(uint8_t number)
+{
+    if (number >= 100)
+    {
+        while (!SendInterrupt_UART(
+            (uint8_t)('0' + number / 100)
+        ));
+
+        while (!SendInterrupt_UART(
+            (uint8_t)('0' + (number / 10) % 10)
+        ));
+
+        while (!SendInterrupt_UART(
+            (uint8_t)('0' + number % 10)
+        ));
+    }
+    else if (number >= 10)
+    {
+        while (!SendInterrupt_UART(
+            (uint8_t)('0' + number / 10)
+        ));
+
+        while (!SendInterrupt_UART(
+            (uint8_t)('0' + number % 10)
+        ));
+    }
+    else
+    {
+        while (!SendInterrupt_UART(
+            (uint8_t)('0' + number)
+        ));
+    }
+}
+
+void SendTextInterrupt_UART(const char *text)
+{
+    while (*text != '\0')
+    {
+        while (!SendInterrupt_UART((uint8_t)*text))
+        {
+        }
+
+        text++;
+    }
+}

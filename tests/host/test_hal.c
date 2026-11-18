@@ -70,52 +70,65 @@ static void feed_text(const char *s)
 {
     while (*s) { uart[0] = 1U << 5; uart[1] = (unsigned char)*s++; USART1_IRQHandler(); }
 }
-/* Chạy ISR với cờ TXE cho tới khi TX queue rỗng, gom các byte đã "gửi ra dây". */
+/* Chạy ISR với cờ TXE cho tới khi TXEIE tắt, gom các byte ISR đã ghi vào DR.
+ * DR đặt giá trị mốc 0x100 (không phải byte) trước mỗi lần gọi để biết ISR có ghi hay không. */
 static void drain(char *out, size_t cap)
 {
     size_t n = 0;
     while (uart[3] & (1U << 7)) {
-        uart[0] = 1U << 7; USART1_IRQHandler();
-        if (uart[3] & (1U << 7)) { assert(n + 1 < cap); out[n++] = (char)uart[1]; }
+        uart[0] = 1U << 7; uart[1] = 0x100U; USART1_IRQHandler();
+        if (uart[1] != 0x100U) { assert(n + 1 < cap); out[n++] = (char)uart[1]; }
     }
     out[n] = 0;
 }
 
 /* ===================== UART ===================== */
 
-/* 1. Khởi tạo: BRR đúng baud trong board_config.h, gọi lại lần 2 bị từ chối. */
+/* 1. Khởi tạo: BRR = 115200 @ 8 MHz (69), bật UE/TE/RE/RXNEIE, không bật DMA, bật IRQ37. */
 static void test_uart_init(void)
 {
-    CHECK(Config_uart() == pdPASS);
+    Config_uart();
     CHECK(uart[2] == (BSP_APB2_CLOCK_HZ + BSP_UART_BAUD / 2U) / BSP_UART_BAUD);
-    CHECK(Config_uart() == pdFAIL);
+    CHECK(uart[2] == 69U);
+    CHECK((uart[3] & ((1U << 2) | (1U << 3) | (1U << 5) | (1U << 13))) ==
+          ((1U << 2) | (1U << 3) | (1U << 5) | (1U << 13)));
+    CHECK(uart[5] == 0U);
+    CHECK((*(volatile uint32_t *)0xE000E104UL) == (1U << 5));
 }
 
-/* 2. Gửi số: 0, 101, 255 ra đúng chuỗi (bản cũ in sai từ 101 trở lên). */
+/* 2. Gửi số: đủ 0..255 ra đúng chuỗi (bản cũ in sai từ 101 trở lên). */
 static void test_uart_send_number(void)
 {
-    char out[16];
-    CHECK(SendNumberInterrupt_UART(0) == HAL_OK);   drain(out, sizeof out); CHECK(strcmp(out, "0") == 0);
-    CHECK(SendNumberInterrupt_UART(101) == HAL_OK); drain(out, sizeof out); CHECK(strcmp(out, "101") == 0);
-    CHECK(SendNumberInterrupt_UART(255) == HAL_OK); drain(out, sizeof out); CHECK(strcmp(out, "255") == 0);
+    char out[16], expected[8];
+    for (unsigned n = 0; n <= 255U; n++) {
+        snprintf(expected, sizeof expected, "%u", n);
+        SendNumberInterrupt_UART((uint8_t)n);
+        drain(out, sizeof out);
+        CHECK(strcmp(out, expected) == 0);
+    }
 }
 
-/* 3. Nhận một dòng kết thúc CRLF -> trả đúng nội dung, không còn dòng thừa. */
+/* 3. Nhận một dòng kết thúc CRLF -> trả đúng nội dung, không còn dòng thừa.
+ *    UART_ReadLine xử lý 1 byte mỗi lần gọi nên gọi lặp tới khi có dòng. */
 static void test_uart_read_line(void)
 {
     char line[16];
+    unsigned calls = 0;
     feed_text("HELLO\r\n");
-    CHECK(UART_ReadLine(line, sizeof line) == 1);
+    while (!UART_ReadLine(line, sizeof line)) CHECK(++calls < 16U);
     CHECK(strcmp(line, "HELLO") == 0);
+    CHECK(UART_ReadLine(line, sizeof line) == 0);   /* '\n' sau '\r' không tạo dòng rỗng */
     CHECK(UART_ReadLine(line, sizeof line) == 0);
 }
 
-/* 4. Tham số sai bị từ chối: con trỏ NULL, chờ vô hạn (portMAX_DELAY). */
-static void test_uart_bad_args(void)
+/* 4. Gửi chuỗi: SendString tự thêm '\n', SendText thì không. */
+static void test_uart_send_text(void)
 {
-    CHECK(hal_uart_write(NULL, 1, 10) == HAL_INVALID_ARGUMENT);
-    CHECK(hal_uart_write((const uint8_t *)"a", 1, portMAX_DELAY) == HAL_INVALID_ARGUMENT);
-    CHECK(SendTextInterrupt_UART(NULL) == HAL_INVALID_ARGUMENT);
+    char out[16];
+    SendStringInterrupt_UART("abc"); drain(out, sizeof out); CHECK(strcmp(out, "abc\n") == 0);
+    SendTextInterrupt_UART("ON");    drain(out, sizeof out); CHECK(strcmp(out, "ON") == 0);
+    CHECK(StringEqual("ON", "ON"));
+    CHECK(!StringEqual("ON", "OFF"));
 }
 
 /* ===================== GPIO ===================== */
@@ -233,7 +246,7 @@ int main(void)
     test_uart_init();
     test_uart_send_number();
     test_uart_read_line();
-    test_uart_bad_args();
+    test_uart_send_text();
 
     test_gpio_config_output();
     test_gpio_reject_bad_speed();

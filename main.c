@@ -13,7 +13,7 @@ int main(void)
 {
     bsp_system_init();
     if (app_ipc_init() != pdPASS) bsp_panic();
-    if (Config_uart() != pdPASS) bsp_panic();
+    Config_uart();
 #if APP_ENABLE_MEASURE || APP_ENABLE_DISPLAY
     if (hal_i2c_init() != HAL_OK) bsp_panic();
 #endif

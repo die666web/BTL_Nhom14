@@ -29,7 +29,7 @@ int main(void)
     GPIO_ConfigPin(GPIOC, LED_PIN, GPIO_MODE_OUTPUT_PP, GPIO_SPEED_2MHZ);
 
     if (app_ipc_init() != pdPASS) bsp_panic();
-    if (Config_uart() != pdPASS) bsp_panic();
+    Config_uart();
     if (task_comm_create() != pdPASS) bsp_panic();
 
     vTaskStartScheduler();
