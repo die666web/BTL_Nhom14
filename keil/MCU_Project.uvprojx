@@ -12,7 +12,7 @@
         <TargetCommonOption>
           <Device>STM32F103C8</Device>
           <Vendor>STMicroelectronics</Vendor>
-          <Cpu>IRAM(0x20000000,0x5000) IROM(0x08002000,0xDC00) CLOCK(8000000) CPUTYPE("Cortex-M3") ELITTLE</Cpu>
+          <Cpu>IRAM(0x20000000,0x5000) IROM(0x08000000,0x10000) CLOCK(8000000) CPUTYPE("Cortex-M3") ELITTLE</Cpu>
           <FlashUtilSpec />
           <StartupFile />
           <FlashDriverDll />
@@ -183,7 +183,7 @@
               <MiscControls>-std=c11 -Wall -Wextra -Werror -ffunction-sections -fdata-sections</MiscControls>
               <Define>STM32F10X_MD</Define>
               <Undefine />
-              <IncludePath>..;..\bsp;..\hal\inc;..\app\inc;..\common\ota_frame;..\middlewares\FreeRTOS-Kernel\include;..\middlewares\FreeRTOS-Kernel\portable\GCC\ARM_CM3</IncludePath>
+              <IncludePath>..;..\bsp;..\hal\inc;..\app\inc;..\middlewares\FreeRTOS-Kernel\include;..\middlewares\FreeRTOS-Kernel\portable\GCC\ARM_CM3</IncludePath>
             </VariousControls>
           </Cads>
           <LDads>
@@ -193,7 +193,7 @@
             <noStLib>0</noStLib>
             <RepFail>1</RepFail>
             <useFile>1</useFile>
-            <TextAddressRange>0x08002000</TextAddressRange>
+            <TextAddressRange>0x08000000</TextAddressRange>
             <DataAddressRange>0x20000000</DataAddressRange>
             <pXoBase />
             <ScatterFile>.\STM32F103C8.sct</ScatterFile>
@@ -308,16 +308,6 @@
               <FileName>task_measure.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\app\src\task_measure.c</FilePath>
-            </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>Common</GroupName>
-          <Files>
-            <File>
-              <FileName>ota_frame.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\common\ota_frame\ota_frame.c</FilePath>
             </File>
           </Files>
         </Group>

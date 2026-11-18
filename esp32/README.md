@@ -1,21 +1,21 @@
 # ESP32 web OTA cho STM32
 Lê Trọng Mạnh phụ trách. PlatformIO + Arduino, board `esp32dev`. Mở **thư mục `esp32/`** trong VS Code.
 Đặc tả UART: `docs/OTA_CONTRACT.md`. Quy trình kiểm tra: `docs/OTA_WORKFLOW.md`.
-Nối dây: ESP32 GPIO17 (TX) → STM32 PA10, GPIO16 (RX) ← PA9, chung GND, 115200 8N1.
+Nối dây: ESP32 GPIO17 (TX) → STM32 PA10, GPIO16 (RX) ← PA9, chung GND, 115200.
+Nạp STM32 qua **bootloader ROM có sẵn của ST** (giao thức AN3155), không cần bootloader riêng.
 
 ## Các file
 
 | File | Làm gì |
 |---|---|
-| `platformio.ini` | Board, framework, LittleFS, `lib_extra_dirs = ../common` (codec dùng chung với STM32) |
+| `platformio.ini` | Board, framework, LittleFS |
 | `src/main.cpp` | Khởi động: LittleFS, Wi-Fi AP + log thiết bị kết nối, UART STM32, web |
 | `src/web_ota.cpp` | Web server: `/`, `/status`, `/upload`, `/flash` |
 | `data/index.html` | Giao diện web (nạp bằng `pio run -t uploadfs`) |
-| `src/fw_store.cpp` | **Lưu LittleFS**: ghi file upload, CRC32, kiểm tra vector theo layout 0x08002000, giữ bản cũ |
-| `src/uart_bridge.cpp` | Máy trạng thái gửi OTA v1: ENTER_UPDATE → BEGIN → DATA… → END, timeout + 3 lần gửi lại |
-| `include/stm32_memory_map.h` | Lấy địa chỉ từ `common/ota_frame/ota_layout.h` |
+| `src/fw_store.cpp` | **Lưu LittleFS**: ghi file upload, CRC32, kiểm tra vector theo địa chỉ 0x08000000, giữ bản cũ |
+| `src/uart_bridge.cpp` | Gửi `#ENTER_BOOTLOADER#` cho app, rồi AN3155: đồng bộ 0x7F → Erase → Write + Read lại → Go (chạy trong task riêng) |
+| `include/stm32_memory_map.h` | Địa chỉ Flash/SRAM của STM32F103C8 |
 | `include/secrets.h` | Tên + mật khẩu Wi-Fi (không commit, copy từ `.example`) |
-| `../common/ota_frame/` | Frame A5 5A, CRC16/CRC32, parser — cùng code với bootloader và app |
 
 ## LittleFS lưu gì
 ```

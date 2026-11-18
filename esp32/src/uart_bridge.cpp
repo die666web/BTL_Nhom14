@@ -1,229 +1,452 @@
-/* uart_bridge — phía gửi OTA UART v1 (docs/OTA_CONTRACT.md mục 6). Lê Trọng Mạnh.
+/* uart_bridge — nạp firmware xuống STM32 qua bootloader ROM có sẵn của ST. Lê Trọng Mạnh.
+ * Giao thức: ST AN3155 "USART protocol used in the STM32 bootloader".
  *
- *   IDLE -> WAIT_READY -> WAIT_BEGIN_ACK -> WAIT_DATA_ACK (lặp) -> WAIT_END_ACK -> DONE
- *                                     bất kỳ NACK đúng lệnh / hết retry -> FAILED
+ * Các bước:
+ *   1. Gửi chuỗi "#ENTER_BOOTLOADER#" (UART 8N1) cho app STM32.
+ *      App tắt relay, ghi cờ BKP, reset rồi nhảy vào bootloader ROM.
+ *   2. Đổi UART sang 8E1 (bootloader ROM dùng parity chẵn), gửi 0x7F để bootloader dò baud,
+ *      chờ ACK (0x79).
+ *   3. Xoá toàn bộ Flash (lệnh Erase).
+ *   4. Ghi từng khối 256 byte (lệnh Write Memory), đọc lại so sánh (lệnh Read Memory).
+ *   5. Lệnh Go tới 0x08000000: STM32 chạy app mới.
  *
- * Stop-and-wait: gửi trọn 1 frame, chờ đúng phản hồi, mới gửi frame tiếp.
- * Mỗi yêu cầu: 1 lần gửi + tối đa 3 lần gửi lại (nguyên frame). Timeout tính từ khi byte cuối ra dây.
- * Log ra Serial (USB), UART OTA là Serial2 riêng. */
+ * Việc nạp chạy trong một task FreeRTOS riêng, viết tuần tự từng bước cho dễ đọc;
+ * web server ở loop() vẫn trả lời trạng thái trong lúc nạp. */
 #include <Arduino.h>
 #include <stdarg.h>
 #include <LittleFS.h>
 #include "uart_bridge.h"
-#include "ota_frame.h"
-#include "ota_layout.h"
+#include "stm32_memory_map.h"
 
-#define OTA_UART_BAUD     115200
-#define OTA_UART_RX_PIN   16      /* ESP32 RX  <- STM32 PA9 (TX)  */
-#define OTA_UART_TX_PIN   17      /* ESP32 TX  -> STM32 PA10 (RX) */
+/* ---------- Nối dây và UART ---------- */
+#define STM32_UART_BAUD       115200
+#define STM32_UART_RX_PIN     16          /* ESP32 RX  <- STM32 PA9 (TX)  */
+#define STM32_UART_TX_PIN     17          /* ESP32 TX  -> STM32 PA10 (RX) */
 
-#define TO_READY_MS   1000u
-#define TO_BEGIN_MS   3000u       /* bao gồm thời gian STM32 xoá Flash */
-#define TO_DATA_MS     100u
-#define TO_END_MS      500u
-#define MAX_RETRY        3u
+/* Chuỗi bảo app STM32 vào bootloader. PHẢI khớp ENTER_COMMAND trong app/src/task_comm.c. */
+#define ENTER_COMMAND         "#ENTER_BOOTLOADER#"
 
-static HardwareSerial &ota = Serial2;
+/* ---------- Giao thức AN3155 ---------- */
+#define BOOTLOADER_SYNC       0x7F        /* byte đầu tiên để bootloader dò baud */
+#define BOOTLOADER_ACK        0x79
+#define BOOTLOADER_NACK       0x1F
 
-enum State { IDLE, WAIT_READY, WAIT_BEGIN_ACK, WAIT_DATA_ACK, WAIT_END_ACK, DONE, FAILED };
+#define COMMAND_READ_MEMORY   0x11
+#define COMMAND_GO            0x21
+#define COMMAND_WRITE_MEMORY  0x31
+#define COMMAND_ERASE         0x43
+#define COMMAND_EXTENDED_ERASE 0x44       /* chip đời mới chỉ hỗ trợ lệnh này thay cho 0x43 */
 
-static State        s_state = IDLE;
-static File         s_file;
-static uint32_t     s_size, s_crc, s_sent;
-static uint16_t     s_seq;
-static uint8_t      s_chunk;             /* số byte của gói DATA đang chờ ACK */
-static uint8_t      s_tx[OTA_FRAME_MAX];
-static size_t       s_txlen;
-static uint32_t     s_t0;
-static uint8_t      s_retry;
-static ota_parser_t s_rx;
-static char         s_text[80] = "san sang";
+#define BLOCK_SIZE            256         /* Write/Read Memory: tối đa 256 byte mỗi lần */
 
-static const char *state_name(State s)
+/* ---------- Thời gian chờ ---------- */
+#define ACK_TIMEOUT_MS        1000
+#define ERASE_TIMEOUT_MS      20000       /* xoá cả Flash mất vài giây */
+#define SYNC_ATTEMPTS         30          /* 30 x 100 ms = 3 s chờ STM32 reset vào bootloader */
+#define SYNC_RETRY_MS         100
+#define ENTER_SETTLE_MS       100         /* chờ app reset xong sau khi gửi ENTER_COMMAND */
+
+#define FLASH_TASK_STACK      8192
+
+static HardwareSerial &stm32 = Serial2;
+
+static volatile bool s_busy = false;
+static char s_status[96] = "san sang";
+static char s_firmware_path[32];
+
+
+/* ================= Trạng thái hiển thị trên web ================= */
+
+static void set_status(const char *format, ...)
 {
-    switch (s) {
-    case WAIT_READY:     return "READY";
-    case WAIT_BEGIN_ACK: return "ACK(BEGIN)";
-    case WAIT_DATA_ACK:  return "ACK(DATA)";
-    case WAIT_END_ACK:   return "ACK(END)";
-    default:             return "?";
+    char text[sizeof(s_status)];
+    va_list arguments;
+
+    va_start(arguments, format);
+    vsnprintf(text, sizeof(text), format, arguments);
+    va_end(arguments);
+
+    memcpy(s_status, text, sizeof(s_status));
+    Serial.printf("[ota] %s\n", s_status);
+}
+
+
+/* ================= UART cấp thấp ================= */
+
+static void open_uart(uint32_t config)
+{
+    stm32.end();
+    stm32.begin(STM32_UART_BAUD, config, STM32_UART_RX_PIN, STM32_UART_TX_PIN);
+}
+
+static void clear_input(void)
+{
+    while (stm32.available())
+    {
+        stm32.read();
     }
 }
 
-static uint32_t timeout_of(State s)
+/* Đọc 1 byte, trả -1 nếu hết thời gian. */
+static int read_byte(uint32_t timeout_ms)
 {
-    switch (s) {
-    case WAIT_READY:     return TO_READY_MS;
-    case WAIT_BEGIN_ACK: return TO_BEGIN_MS;
-    case WAIT_DATA_ACK:  return TO_DATA_MS;
-    default:             return TO_END_MS;
+    uint32_t start = millis();
+
+    while (millis() - start < timeout_ms)
+    {
+        if (stm32.available())
+        {
+            return stm32.read();
+        }
+
+        delay(1);
     }
+
+    return -1;
 }
 
-static uint8_t expected_type(State s)
+static bool wait_ack(uint32_t timeout_ms)
 {
-    switch (s) {
-    case WAIT_READY:     return OTA_T_ENTER_UPDATE;
-    case WAIT_BEGIN_ACK: return OTA_T_BEGIN;
-    case WAIT_DATA_ACK:  return OTA_T_DATA;
-    default:             return OTA_T_END;
+    return read_byte(timeout_ms) == BOOTLOADER_ACK;
+}
+
+
+/* ================= Lệnh AN3155 ================= */
+
+/* Mỗi lệnh gửi 2 byte: mã lệnh và phần bù của nó (XOR 0xFF). */
+static bool send_command(uint8_t command)
+{
+    uint8_t frame[2] = { command, (uint8_t)(command ^ 0xFF) };
+
+    stm32.write(frame, sizeof(frame));
+
+    return wait_ack(ACK_TIMEOUT_MS);
+}
+
+/* Địa chỉ gửi 4 byte (byte cao trước) + 1 byte checksum = XOR của 4 byte. */
+static bool send_address(uint32_t address)
+{
+    uint8_t frame[5];
+
+    frame[0] = (uint8_t)(address >> 24);
+    frame[1] = (uint8_t)(address >> 16);
+    frame[2] = (uint8_t)(address >> 8);
+    frame[3] = (uint8_t)(address);
+    frame[4] = frame[0] ^ frame[1] ^ frame[2] ^ frame[3];
+
+    stm32.write(frame, sizeof(frame));
+
+    return wait_ack(ACK_TIMEOUT_MS);
+}
+
+/* Gửi 0x7F nhiều lần tới khi bootloader trả lời.
+ * NACK cũng tính là sống: bootloader đã dò baud từ trước, giờ coi 0x7F là lệnh sai. */
+static bool sync_with_bootloader(int attempts)
+{
+    for (int attempt = 0; attempt < attempts; attempt++)
+    {
+        clear_input();
+        stm32.write(BOOTLOADER_SYNC);
+
+        int reply = read_byte(SYNC_RETRY_MS);
+
+        if (reply == BOOTLOADER_ACK || reply == BOOTLOADER_NACK)
+        {
+            return true;
+        }
     }
+
+    return false;
 }
 
-static void set_text(const char *fmt, ...)
+/* Xoá toàn bộ Flash. Thử lệnh Erase (STM32F1), không được thì dùng Extended Erase. */
+static bool erase_all(void)
 {
-    va_list ap;
-    va_start(ap, fmt);
-    vsnprintf(s_text, sizeof s_text, fmt, ap);
-    va_end(ap);
-    Serial.printf("[ota] %s\n", s_text);
+    if (send_command(COMMAND_ERASE))
+    {
+        uint8_t global_erase[2] = { 0xFF, 0x00 };          /* 0xFF = xoá tất cả, kèm checksum */
+
+        stm32.write(global_erase, sizeof(global_erase));
+
+        return wait_ack(ERASE_TIMEOUT_MS);
+    }
+
+    if (send_command(COMMAND_EXTENDED_ERASE))
+    {
+        uint8_t global_erase[3] = { 0xFF, 0xFF, 0x00 };    /* 0xFFFF = xoá tất cả, kèm checksum */
+
+        stm32.write(global_erase, sizeof(global_erase));
+
+        return wait_ack(ERASE_TIMEOUT_MS);
+    }
+
+    return false;
 }
 
-static void finish(State st)
+/* Ghi length byte (1..256, bội của 4) vào address. */
+static bool write_block(uint32_t address, const uint8_t *data, size_t length)
 {
-    if (s_file) s_file.close();
-    s_state = st;
-}
-
-/* Gửi s_tx, chờ byte cuối ra dây rồi mới bắt đầu đếm timeout. */
-static void transmit(void)
-{
-    ota.write(s_tx, s_txlen);
-    ota.flush();
-    s_t0 = millis();
-}
-
-static void send_new(State next, size_t len)
-{
-    s_txlen = len;
-    s_retry = 0;
-    s_state = next;
-    transmit();
-}
-
-static bool send_data(void)
-{
-    uint32_t remain = s_size - s_sent;
-    s_chunk = (uint8_t)(remain < OTA_DATA_CHUNK ? remain : OTA_DATA_CHUNK);
-    uint8_t buf[OTA_DATA_CHUNK];
-    if (!s_file.seek((uint32_t)s_seq * OTA_DATA_CHUNK) || s_file.read(buf, s_chunk) != s_chunk) {
-        set_text("loi: doc file LittleFS");
-        finish(FAILED);
+    if (!send_command(COMMAND_WRITE_MEMORY))
+    {
         return false;
     }
-    send_new(WAIT_DATA_ACK, ota_build_data(s_tx, s_seq, buf, s_chunk));
-    if (s_seq % 40u == 0u)
-        set_text("dang nap %lu%% (%lu/%lu B)", (unsigned long)(s_sent * 100u / s_size),
-                 (unsigned long)s_sent, (unsigned long)s_size);
+
+    if (!send_address(address))
+    {
+        return false;
+    }
+
+    /* Gửi (số byte - 1), dữ liệu, rồi checksum = XOR của tất cả các byte vừa gửi. */
+    uint8_t count = (uint8_t)(length - 1);
+    uint8_t checksum = count;
+
+    for (size_t index = 0; index < length; index++)
+    {
+        checksum ^= data[index];
+    }
+
+    stm32.write(count);
+    stm32.write(data, length);
+    stm32.write(checksum);
+
+    return wait_ack(ACK_TIMEOUT_MS);
+}
+
+/* Đọc length byte (1..256) từ address vào output. */
+static bool read_block(uint32_t address, uint8_t *output, size_t length)
+{
+    if (!send_command(COMMAND_READ_MEMORY))
+    {
+        return false;
+    }
+
+    if (!send_address(address))
+    {
+        return false;
+    }
+
+    uint8_t count = (uint8_t)(length - 1);
+    uint8_t frame[2] = { count, (uint8_t)(count ^ 0xFF) };
+
+    stm32.write(frame, sizeof(frame));
+
+    if (!wait_ack(ACK_TIMEOUT_MS))
+    {
+        return false;
+    }
+
+    for (size_t index = 0; index < length; index++)
+    {
+        int value = read_byte(ACK_TIMEOUT_MS);
+
+        if (value < 0)
+        {
+            return false;
+        }
+
+        output[index] = (uint8_t)value;
+    }
+
     return true;
 }
+
+/* Bảo bootloader nhảy tới address (chạy app). */
+static bool go(uint32_t address)
+{
+    if (!send_command(COMMAND_GO))
+    {
+        return false;
+    }
+
+    return send_address(address);
+}
+
+
+/* ================= Quy trình nạp ================= */
+
+/* Bước 1 + 2: đưa STM32 vào bootloader ROM và đồng bộ. */
+static bool connect_to_bootloader(void)
+{
+    /* STM32 có thể đã ở sẵn bootloader (lần nạp trước lỗi, hoặc đã gạt BOOT0 = 1):
+     * thử đồng bộ luôn. Nếu app đang chạy, mấy byte 0x7F này bị app bỏ qua. */
+    open_uart(SERIAL_8E1);
+
+    if (sync_with_bootloader(3))
+    {
+        return true;
+    }
+
+    /* App đang chạy: gửi lệnh bảo app vào bootloader. */
+    open_uart(SERIAL_8N1);
+    clear_input();
+    stm32.print(ENTER_COMMAND);
+    stm32.flush();
+
+    /* Chờ app tắt relay + reset vào bootloader (thường < 50 ms), rồi mới đồng bộ:
+     * byte 0x7F đầu tiên phải tới khi bootloader đã sẵn sàng thì nó mới dò baud đúng. */
+    open_uart(SERIAL_8E1);
+    delay(ENTER_SETTLE_MS);
+
+    return sync_with_bootloader(SYNC_ATTEMPTS);
+}
+
+/* Bước 4: ghi cả file theo từng khối 256 byte, mỗi khối đọc lại so sánh. */
+static bool write_and_verify_file(File &file, uint32_t file_size)
+{
+    uint8_t block[BLOCK_SIZE];
+    uint8_t readback[BLOCK_SIZE];
+    uint32_t offset = 0;
+
+    while (offset < file_size)
+    {
+        size_t length = file.read(block, BLOCK_SIZE);
+
+        if (length == 0)
+        {
+            set_status("loi: doc file LittleFS");
+            return false;
+        }
+
+        /* Write Memory cần số byte là bội của 4: đệm 0xFF (giống Flash đã xoá). */
+        while (length % 4 != 0)
+        {
+            block[length] = 0xFF;
+            length++;
+        }
+
+        uint32_t address = STM32_APP_START + offset;
+
+        if (!write_block(address, block, length))
+        {
+            set_status("loi: ghi Flash tai 0x%08lX", (unsigned long)address);
+            return false;
+        }
+
+        if (!read_block(address, readback, length) || memcmp(block, readback, length) != 0)
+        {
+            set_status("loi: doc lai khong khop tai 0x%08lX", (unsigned long)address);
+            return false;
+        }
+
+        offset += BLOCK_SIZE;
+
+        if ((offset / BLOCK_SIZE) % 16 == 0)
+        {
+            uint32_t done = offset < file_size ? offset : file_size;
+
+            set_status("dang nap %lu%% (%lu/%lu B)",
+                       (unsigned long)(done * 100 / file_size),
+                       (unsigned long)done, (unsigned long)file_size);
+        }
+    }
+
+    return true;
+}
+
+static bool flash_firmware(void)
+{
+    File file = LittleFS.open(s_firmware_path, "r");
+
+    if (!file)
+    {
+        set_status("loi: khong mo duoc %s", s_firmware_path);
+        return false;
+    }
+
+    uint32_t file_size = file.size();
+
+    if (file_size < 8 || file_size > STM32_APP_MAX_SIZE)
+    {
+        set_status("loi: kich thuoc %lu B ngoai vung Flash", (unsigned long)file_size);
+        file.close();
+        return false;
+    }
+
+    set_status("dang vao bootloader STM32");
+
+    if (!connect_to_bootloader())
+    {
+        set_status("loi: STM32 khong vao bootloader (kiem tra day UART)");
+        file.close();
+        return false;
+    }
+
+    set_status("dang xoa Flash");
+
+    if (!erase_all())
+    {
+        set_status("loi: xoa Flash");
+        file.close();
+        return false;
+    }
+
+    bool written = write_and_verify_file(file, file_size);
+
+    file.close();
+
+    if (!written)
+    {
+        return false;              /* set_status đã ghi lý do */
+    }
+
+    if (!go(STM32_APP_START))
+    {
+        set_status("loi: lenh Go (firmware da ghi xong, reset STM32 de chay)");
+        return false;
+    }
+
+    set_status("xong: da nap va doc lai dung %lu B, STM32 dang chay app moi",
+               (unsigned long)file_size);
+    return true;
+}
+
+static void flash_task(void *argument)
+{
+    (void)argument;
+
+    flash_firmware();
+
+    open_uart(SERIAL_8N1);         /* trả UART về chế độ nói chuyện với app */
+    s_busy = false;
+
+    vTaskDelete(NULL);
+}
+
+
+/* ================= API ================= */
 
 void uart_bridge_begin(void)
 {
-    ota.begin(OTA_UART_BAUD, SERIAL_8N1, OTA_UART_RX_PIN, OTA_UART_TX_PIN);
-    ota_parser_reset(&s_rx);
+    open_uart(SERIAL_8N1);
 }
 
-bool uart_bridge_busy(void) { return s_state >= WAIT_READY && s_state <= WAIT_END_ACK; }
+bool uart_bridge_busy(void)
+{
+    return s_busy;
+}
 
-const char *uart_bridge_state_text(void) { return s_text; }
+const char *uart_bridge_state_text(void)
+{
+    return s_status;
+}
 
 bool uart_bridge_start(const char *path)
 {
-    if (uart_bridge_busy()) return false;
-    s_file = LittleFS.open(path, "r");
-    if (!s_file) { set_text("loi: khong mo duoc %s", path); s_state = FAILED; return false; }
-    s_size = s_file.size();
-    if (s_size < 8u || s_size > OTA_APP_MAX_SIZE) {
-        set_text("loi: kich thuoc %lu B ngoai vung app", (unsigned long)s_size);
-        finish(FAILED);
+    if (s_busy)
+    {
         return false;
     }
 
-    /* CRC-32 tính lại trên đúng file sẽ gửi (không tin metadata cũ). */
-    uint32_t crc = OTA_CRC32_INIT;
-    uint8_t buf[256];
-    size_t n;
-    while ((n = s_file.read(buf, sizeof buf)) > 0) crc = ota_crc32_update(crc, buf, n);
-    s_crc = ota_crc32_final(crc);
+    snprintf(s_firmware_path, sizeof(s_firmware_path), "%s", path);
+    s_busy = true;
+    set_status("bat dau nap %s", s_firmware_path);
 
-    s_sent = 0;
-    s_seq = 0;
-    while (ota.available()) ota.read();       /* bỏ rác cũ */
-    ota_parser_reset(&s_rx);
-    set_text("dang vao bootloader (%lu B, crc %08lX)", (unsigned long)s_size, (unsigned long)s_crc);
-    send_new(WAIT_READY, ota_build_enter_update(s_tx));
+    if (xTaskCreate(flash_task, "stm32_flash", FLASH_TASK_STACK, NULL, 1, NULL) != pdPASS)
+    {
+        s_busy = false;
+        set_status("loi: khong tao duoc task nap");
+        return false;
+    }
+
     return true;
-}
-
-static void on_nack(const uint8_t *b, uint8_t len)
-{
-    if (len != 5u || b[1] != expected_type(s_state)) return;   /* NACK của lệnh khác: bỏ qua */
-    uint16_t seq = ota_get_u16(&b[3]);
-    if (s_state == WAIT_DATA_ACK && seq != s_seq && seq != OTA_SEQ_NONE) return;
-    set_text("loi: STM32 tu choi %s: %s", state_name(s_state), ota_error_name(b[2]));
-    finish(FAILED);
-}
-
-static void on_frame(const uint8_t *b, uint8_t len)
-{
-    if (b[0] == OTA_T_NACK) { on_nack(b, len); return; }
-
-    switch (s_state) {
-    case WAIT_READY:
-        if (b[0] == OTA_T_READY && len == 1u) {
-            set_text("bootloader san sang, dang xoa flash");
-            send_new(WAIT_BEGIN_ACK, ota_build_begin(s_tx, s_size, s_crc));
-        }
-        break;
-    case WAIT_BEGIN_ACK:
-        if (b[0] == OTA_T_ACK && len == 2u && b[1] == OTA_T_BEGIN) send_data();
-        break;
-    case WAIT_DATA_ACK:
-        /* ACK cũ (seq khác) bị bỏ qua và KHÔNG khởi động lại bộ đếm thời gian. */
-        if (b[0] == OTA_T_ACK && len == 4u && b[1] == OTA_T_DATA && ota_get_u16(&b[2]) == s_seq) {
-            s_sent += s_chunk;
-            s_seq++;
-            if (s_sent >= s_size) {
-                set_text("dang kiem tra tren STM32");
-                send_new(WAIT_END_ACK, ota_build_end(s_tx));
-            } else {
-                send_data();
-            }
-        }
-        break;
-    case WAIT_END_ACK:
-        if (b[0] == OTA_T_ACK && len == 2u && b[1] == OTA_T_END) {
-            set_text("xong: firmware da qua kiem tra va duoc commit (%lu B)", (unsigned long)s_size);
-            finish(DONE);
-        }
-        break;
-    default:
-        break;
-    }
-}
-
-void uart_bridge_loop(void)
-{
-    while (ota.available()) {
-        uint8_t byte = (uint8_t)ota.read();
-        if (ota_parser_feed(&s_rx, byte, millis()))
-            on_frame(s_rx.body, s_rx.len);
-    }
-
-    if (!uart_bridge_busy()) return;
-    if ((uint32_t)(millis() - s_t0) <= timeout_of(s_state)) return;
-
-    if (s_retry < MAX_RETRY) {
-        s_retry++;
-        Serial.printf("[ota] het %lu ms cho %s, gui lai lan %u\n",
-                      (unsigned long)timeout_of(s_state), state_name(s_state), s_retry);
-        transmit();
-        return;
-    }
-    if (s_state == WAIT_END_ACK)
-        set_text("chua xac nhan duoc ket qua (mat ACK END) - kiem tra STM32");
-    else
-        set_text("loi: het thoi gian cho %s", state_name(s_state));
-    finish(FAILED);
 }

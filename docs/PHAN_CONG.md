@@ -39,15 +39,11 @@ Nhánh: `feature/oled`, sau đó `feature/task-display`.
 | `hal/src/hal_i2c.c` | **Đã viết, chờ test kit.** I2C1 100 kHz polling; mutex trong từng transaction, timeout, NACK, recovery 9 xung SCL |
 | `hal/src/ina219.c` | **Đã viết.** Calibration theo shunt; đọc U/I, báo lỗi/overflow |
 | `app/src/task_measure.c` | **Đã viết.** Chu kỳ 200ms, lọc, P=U*I, publish valid/timestamp |
-| `app/src/task_comm.c` | Parser UART, OTA REQUEST/OFF_ACK |
-| `bootloader/src/main.c` | Entry point bootloader độc lập, giữ relay OFF |
-| `bootloader/src/boot_protocol.c` | Packet, sequence, CRC, ACK/NACK, timeout |
-| `bootloader/src/boot_flash.c` | Kiểm tra biên, erase/program/verify |
-| `bootloader/src/boot_validate.c` | CRC/size/vector, ở lại recovery nếu firmware sai |
-| `bootloader/src/boot_jump.c` | Dừng ngoại vi/ngắt, VTOR/MSP/clock handoff |
+| `app/src/task_comm.c` | Dò lệnh `#ENTER_BOOTLOADER#`, OTA REQUEST/OFF_ACK |
+| `bsp/bsp.c` | Cờ BKP, nhảy vào bootloader ROM của ST, giữ relay OFF |
 | `esp32/src/main.cpp` | Entry ESP32, Wi-Fi/web setup |
 | `esp32/src/web_ota.cpp` + `esp32/data/index.html` | Upload, tiến độ/lỗi/phiên bản |
-| `esp32/src/uart_bridge.cpp` | Gửi gói, retry, xác nhận app mới |
+| `esp32/src/uart_bridge.cpp` | Giao thức AN3155: xoá, ghi, đọc lại, Go |
 | `tests/manual/MANH.md` | Đo, I2C tranh chấp, UART/OTA, heap/stack |
 
 Nền **đã chuẩn bị, chỉ kiểm tra/tích hợp, không giao viết lại**:
@@ -61,5 +57,5 @@ Bốn task phải do người nhận nhiệm vụ viết thật; bản khung ch�
 2. Mạnh làm I2C trước; Võ có thể làm relay/button ngay; Công chốt model OLED và chuẩn bị UI/mock.
 3. Code thiết bị trong `hal/` (relay/button/OLED/INA219) đã qua PR rồi mới viết task riêng, không chạm main.
 4. Mạnh tích hợp trên `integration/system-v1`, bật từng `APP_ENABLE_*`, đo heap/stack và test.
-5. Chức năng đo/điều khiển/hiển thị ổn mới ghép OTA. Chốt phân vùng Flash trước code bootloader.
+5. Chức năng đo/điều khiển/hiển thị ổn mới ghép OTA. Dùng bootloader ROM của ST, không tự viết bootloader.
 6. Chỉ release vào main sau test phần cứng. Không gắn nhãn “ổn định” chỉ vì build được.

@@ -29,7 +29,7 @@ Mã không phụ thuộc đường dẫn CMSIS bên ngoài như Makefile cũ.
 | GPIO_ConfigPin/RCC | Khởi tạo trước scheduler, không đổi pin/clock từ các task |
 | Cấu hình RTOS/build | Mạnh giữ, hai compiler dùng cùng source |
 
-UART 115200 baud (OTA v1). Đổi thì đổi cùng lúc `BSP_UART_BAUD`, `BOOT_UART_BAUD` (bootloader/src/boot_port.c) và `OTA_UART_BAUD` (esp32/src/uart_bridge.cpp).
+UART 115200 baud. Đổi thì đổi cùng lúc `BSP_UART_BAUD` và `STM32_UART_BAUD` (esp32/src/uart_bridge.cpp).
 `HAL_OK` của write = đã vào queue; chưa bảo đảm bit cuối ra dây. Timeout có thể đã gửi một phần:
 giao thức phải có length/CRC/ACK/retry, không coi lỗi là chưa gửi byte nào.
 Không truyền `portMAX_DELAY`; không gọi UART task API từ ISR hay trước scheduler.
@@ -51,7 +51,7 @@ UART queue dùng API FromISR và IRQ priority 6 (numerical >=5). Không đổi p
 2. Control kiểm tra REQUEST ưu tiên trước nút nhấn; đặt khóa OTA, relay OFF,
    cập nhật mailbox rồi set OFF_ACK. Khi đã khóa, bỏ qua mọi yêu cầu bật.
 3. Comm chờ OFF_ACK có timeout; chưa ACK thì không nhảy/reset.
-4. Leader triển khai request bootloader bền qua reset và quy tắc thoát trạng thái OTA.
+4. `bsp_reboot_to_bootloader()` ghi cờ vào BKP_DR1 rồi reset; `bsp_system_init()` thấy cờ thì nhảy vào bootloader ROM của ST.
 
 Không chờ ACK hoặc delay khi đang giữ mutex. Event ở đây dùng từ task, không từ ISR.
 

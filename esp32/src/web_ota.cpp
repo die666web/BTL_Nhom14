@@ -3,7 +3,7 @@
  *   GET  /status  JSON trạng thái file đang lưu + trạng thái nạp STM32
  *   POST /upload  multipart, field "fw" = file .bin. Chỉ LƯU, chưa nạp.
  *   POST /flash   bắt đầu nạp /fw.bin xuống STM32 (uart_bridge)
- * "Upload OK" chỉ nghĩa là ESP32 đã lưu file; ACK(END) mới là firmware đã được STM32 commit. */
+ * "Upload OK" chỉ nghĩa là ESP32 đã lưu file; trạng thái "xong" mới là STM32 đã ghi, đọc lại đúng và chạy app mới. */
 #include <Arduino.h>
 #include <WebServer.h>
 #include <LittleFS.h>

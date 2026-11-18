@@ -1,13 +1,12 @@
 #ifndef STM32_MEMORY_MAP_H
 #define STM32_MEMORY_MAP_H
-/* Địa chỉ STM32 mà ESP32 dùng để kiểm tra file .bin trước khi lưu.
- * Nguồn duy nhất: common/ota_frame/ota_layout.h (dùng chung với bootloader + app). */
-#include "ota_layout.h"
+/* Địa chỉ STM32F103C8 mà ESP32 dùng để kiểm tra file .bin và nạp.
+ * App nằm ngay đầu Flash (không còn bootloader riêng), dùng cả 64 KiB.
+ * Phải khớp STM32F103C8Tx_FLASH.ld và keil/STM32F103C8.sct. */
 
-#define STM32_APP_START     OTA_APP_BASE        /* 0x08002000 */
-#define STM32_APP_END       OTA_APP_LIMIT       /* 0x0800FC00 (metadata ở sau) */
-#define STM32_APP_MAX_SIZE  OTA_APP_MAX_SIZE    /* 56320 B */
-#define STM32_SRAM_START    OTA_SRAM_BASE
-#define STM32_SRAM_END      OTA_SRAM_END
+#define STM32_APP_START     0x08000000UL
+#define STM32_APP_MAX_SIZE  (64UL * 1024UL)
+#define STM32_SRAM_START    0x20000000UL
+#define STM32_SRAM_END      0x20005000UL      /* ngay sau SRAM 20 KiB */
 
 #endif

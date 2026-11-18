@@ -66,6 +66,5 @@ void setup()
 void loop()
 {
     web_ota_loop();
-    uart_bridge_loop();
     debug_console_loop();
 }

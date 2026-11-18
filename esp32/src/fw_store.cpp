@@ -64,14 +64,14 @@ bool fw_store_end(void)
 
     if (s_size < sizeof(s_head)) return fail("file qua nho");
 
-    /* Ảnh phải build cho địa chỉ STM32_APP_START. Ảnh standalone 0x08000000 sẽ bị loại ở đây. */
+    /* Ảnh phải build cho địa chỉ STM32_APP_START (0x08000000). */
     uint32_t msp   = rd32(&s_head[0]);
     uint32_t reset = rd32(&s_head[4]);
-    /* Cùng quy tắc với bootloader (boot_validate.c) để lỗi bị bắt ngay khi upload. */
+    /* Kiểm tra bảng vector: bắt file sai ngay khi upload, trước khi xoá Flash STM32. */
     if ((msp & 7UL) != 0 || msp <= STM32_SRAM_START || msp > STM32_SRAM_END)
         return fail("MSP khong hop le - khong phai file .bin STM32?");
     if ((reset & 1UL) == 0 || (reset & ~1UL) < STM32_APP_START || (reset & ~1UL) >= STM32_APP_START + s_size)
-        return fail("Reset vector ngoai anh app - build sai dia chi (can 0x08002000)?");
+        return fail("Reset vector ngoai anh app - build sai dia chi (can 0x08000000)?");
 
     uint32_t crc = crc32_final(s_crc);
 

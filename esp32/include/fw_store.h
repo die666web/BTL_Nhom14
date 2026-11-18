@@ -16,7 +16,7 @@
 
 /* CRC-32 IEEE (giống zlib crc32): poly 0x04C11DB7 reflected (0xEDB88320),
  * init 0xFFFFFFFF, xorout 0xFFFFFFFF. Test vector: "123456789" -> 0xCBF43926.
- * Bootloader STM32 phải dùng đúng thuật toán này (bản phần mềm, không dùng CRC unit). */
+ * CRC chỉ để hiển thị trên web; khi nạp, ESP32 đọc lại từng khối từ STM32 để so sánh. */
 uint32_t crc32_update(uint32_t crc, const uint8_t *data, size_t len);  /* crc bắt đầu = 0xFFFFFFFF */
 static inline uint32_t crc32_final(uint32_t crc) { return crc ^ 0xFFFFFFFFUL; }
 

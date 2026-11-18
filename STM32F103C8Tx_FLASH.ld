@@ -1,6 +1,7 @@
 ENTRY(Reset_Handler)
 
-/* APPLICATION sau bootloader: 0x08002000, 55 KiB. Khớp common/ota_frame/ota_layout.h.
+/* APPLICATION nằm ngay đầu Flash 0x08000000, dùng cả 64 KiB.
+ * Không còn bootloader riêng: cập nhật firmware dùng bootloader ROM có sẵn của ST (0x1FFFF000).
  * STM32F103C8T6:
  * Flash: 64 KB
  * RAM:   20 KB
@@ -13,7 +14,7 @@ _Min_Stack_Size = 0x400; /* 1 KB */
 
 MEMORY
 {
-    FLASH (rx)  : ORIGIN = 0x08002000, LENGTH = 55K /* 0xDC00, tới 0x0800FC00 (metadata) */
+    FLASH (rx)  : ORIGIN = 0x08000000, LENGTH = 64K
     RAM   (rwx) : ORIGIN = 0x20000000, LENGTH = 20K
 }
 

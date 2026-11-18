@@ -25,11 +25,12 @@ giả đơn giản. Không mô phỏng thời gian điện hay ngắt thật.
 
 | Hạng mục | Kết quả |
 |---|---|
-| ESP32: upload file qua USB/web, gửi 56 320 B tới STM32 nhận ACK(END) | Đã thử |
+| ESP32: upload file qua USB/web | Đã thử (bản v1) |
+| ESP32 nạp qua bootloader ROM (AN3155) | Chưa — code mới, chưa chạy trên kit |
 | Mức kích relay (PA0 = 1 -> đóng) | Đã xác nhận với module |
 | Relay/nút/TaskControl chạy cùng hệ thống | Chưa ghi kết quả — `tests/manual/VO.md` |
 | OLED, INA219, I2C | Chưa — ghi vào `tests/manual/CONG.md`, `MANH.md` |
 | Build Keil ARM Compiler 6 | Chưa chạy Rebuild All |
-| OTA trọn vòng trên Blue Pill (app → bootloader → app mới) | Chưa |
+| OTA trọn vòng trên Blue Pill (app → bootloader ROM → app mới) | Chưa |
 
 Hạng mục "Chưa" không được coi là đã đạt.

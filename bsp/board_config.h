@@ -5,10 +5,10 @@
  * If clock changes, update UART BRR, timer prescaler and FreeRTOS together. */
 #define BSP_CPU_CLOCK_HZ       8000000UL
 #define BSP_APB2_CLOCK_HZ      BSP_CPU_CLOCK_HZ
-#define BSP_UART_BAUD          115200UL /* OTA v1: phải khớp bootloader (boot_port.c) và ESP32 */
+#define BSP_UART_BAUD          115200UL /* phải khớp ESP32 (esp32/src/uart_bridge.cpp) */
 #define BSP_I2C_SCL_PIN        6U  /* PB6 */
 #define BSP_I2C_SDA_PIN        7U  /* PB7; external pull-ups to 3.3 V */
-/* Port dạng địa chỉ để dùng chung cho app và bootloader (GPIOA 0x40010800, GPIOB 0x40010C00). */
+/* Port dạng địa chỉ (GPIOA 0x40010800, GPIOB 0x40010C00). */
 #define BSP_RELAY_GPIO_BASE    0x40010800UL /* GPIOA */
 #define BSP_RELAY_PIN          0U  /* PA0 */
 #define BSP_BUTTON_GPIO_BASE   0x40010C00UL /* GPIOB */
@@ -20,5 +20,8 @@
 #define BSP_UART_RX_PIN       10U  /* PA10 */
 #define BSP_INA219_ADDR7       0x40U /* confirm A0/A1 */
 #define BSP_OLED_ADDR7         0x3CU /* confirm controller/address on module */
+
+/* Cờ ghi vào BKP_DR1 trước khi reset: sau reset app nhảy vào bootloader ROM của ST để nạp firmware. */
+#define BSP_BKP_FLAG_ENTER_BOOTLOADER  0xB007UL
 
 #endif

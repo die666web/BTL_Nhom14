@@ -1,12 +1,11 @@
 /* App thử OTA: chỉ bật LED PC13 (sáng liên tục) — Lê Trọng Mạnh.
- * Build: make ota-led  ->  build/gcc/ota_led_test.bin (link ở 0x08002000 như app thật).
+ * Build: make ota-led  ->  build/gcc/ota_led_test.bin (link ở 0x08000000 như app thật).
  *
- * Vẫn chạy TaskComm để nhận ENTER_UPDATE từ ESP32, nên sau khi nạp file này qua web
+ * Vẫn chạy TaskComm để nhận "#ENTER_BOOTLOADER#" từ ESP32, nên sau khi nạp file này qua web
  * vẫn OTA lại được firmware.bin thật mà không cần ST-Link.
  *
  * Phân biệt trên kit (Blue Pill, LED PC13 sáng mức thấp):
  *   - Sáng liên tục   : app thử này đang chạy (OTA thành công).
- *   - Nháy chậm/nhanh : bootloader đang chờ/nhận firmware.
  *   - Tắt             : app thật (firmware.bin) đang chạy.
  * Relay vẫn bị BSP ép OFF; không chạy I2C/OLED/INA219.
  */
