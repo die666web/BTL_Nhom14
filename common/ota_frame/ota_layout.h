@@ -2,7 +2,7 @@
 #define OTA_LAYOUT_H
 /* Flash layout STM32F103C8 dùng chung cho bootloader, app và ESP32 (kiểm tra file .bin).
  * Đổi số ở đây thì đổi cả: STM32F103C8Tx_FLASH.ld, bootloader/STM32F103C8_BOOT.ld,
- * keil/STM32F103C8.sct, keil/Bootloader.sct, tools/sync_projects.py.
+ * keil/STM32F103C8.sct, keil/Bootloader.sct.
  *
  *   0x08000000 .. 0x08002000  Bootloader  8 KiB
  *   0x08002000 .. 0x0800FC00  App        55 KiB (56320 B)

@@ -4,7 +4,7 @@
 
 - BSP: chân, clock và trạng thái an toàn của board.
 - HAL (`hal/`): mọi code chạm phần cứng, gồm hai phần nằm chung thư mục:
-  - Ngoại vi MCU, file `hal_*`: GPIO/RCC/DMA/UART/I2C. `hal_gpio.h` giữ tên hàm `GPIO_*` đã có, không buộc viết lại.
+  - Ngoại vi MCU, file `hal_*`: GPIO/RCC/UART/I2C. `hal_gpio.h` giữ tên hàm `GPIO_*` đã có, không buộc viết lại.
   - Thiết bị ngoài, file không có tiền tố `hal_`: `ina219`, `oled`, `relay`, `button`.
     Đây là code viết tiếp trên các hàm `hal_*` (ví dụ `ina219.c` gọi `hal_i2c`), **không phải task**:
     chỉ là hàm thư viện được task gọi, không tự chạy, không có vòng lặp/delay riêng.
@@ -19,14 +19,13 @@ Mã không phụ thuộc đường dẫn CMSIS bên ngoài như Makefile cũ.
 
 | Tài nguyên | Chủ sở hữu / cơ chế |
 |---|---|
-| PB8 relay | TaskControl duy nhất ghi trong vận hành; BSP force-off chỉ startup/panic |
-| PA0 button | TaskControl gọi `button_poll_pressed` mỗi 20ms, không dùng TIM2_CH1 |
+| PA0 relay | Kích mức cao, push-pull. TaskControl duy nhất ghi trong vận hành; BSP force-off chỉ lúc khởi động/lỗi/OTA |
+| PB8 button | TaskControl gọi `button_poll_pressed` mỗi 20ms |
 | I2C1 | HAL lấy g_i2c_mutex cho cả transaction (kể cả repeated START); không khóa lồng |
 | INA219 | TaskMeasure duy nhất; không giữ mutex I2C khi delay chờ conversion |
 | OLED | TaskDisplay duy nhất; địa chỉ 7-bit riêng, cùng bus |
 | UART TX | `hal_uart_write` tự mutex toàn message, task context, timeout theo tick |
 | UART RX | TaskComm duy nhất nhận; không đọc lẫn ReadLine/raw byte |
-| DMA | Low-level, một owner cho mỗi channel; UART hiện không dùng DMA |
 | GPIO_ConfigPin/RCC | Khởi tạo trước scheduler, không đổi pin/clock từ các task |
 | Cấu hình RTOS/build | Mạnh giữ, hai compiler dùng cùng source |
 

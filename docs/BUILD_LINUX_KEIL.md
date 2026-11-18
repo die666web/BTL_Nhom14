@@ -11,7 +11,6 @@ Trên Ubuntu, cài `gcc-arm-none-eabi`, `binutils-arm-none-eabi`, `libnewlib-arm
 
 ```bash
 sudo apt install gcc-arm-none-eabi binutils-arm-none-eabi libnewlib-arm-none-eabi make python3 stlink-tools
-make check-projects
 make -j4
 ```
 
@@ -49,19 +48,10 @@ fromelf --bin --output ..\build\keil\firmware.bin ..\build\keil\firmware.axf
 Keil `.uvprojx` và `.sct` phải commit; `.uvoptx` không commit.
 Bản này đã kiểm cấu trúc/path project; xem VALIDATION để biết build nào đã thật sự được chạy.
 
-## Thêm file mới mà không lệch hai bản
+## Thêm file mới
 
-Các file giao việc hiện tại đã được thêm sẵn. Khi cần file mới, leader thêm đường dẫn vào
-`tools/sources.json` rồi chạy:
-
-```bash
-python3 tools/sync_projects.py
-python3 tools/sync_projects.py --check
-```
-
-Windows có thể dùng `py -3` thay `python3`. Commit cả manifest, `tools/sources.mk`,
-`keil/MCU_Project.uvprojx`. Không chỉ Add Existing Files trong Keil rồi quên Linux.
-Script ghi lại project đã sinh; chỉnh thiết lập chung thì sửa script, không để cấu hình rơi mất lần sau.
+Thêm đường dẫn vào `APP_SRCS` trong `Makefile` **và** Add Existing Files vào đúng nhóm trong
+`keil/MCU_Project.uvprojx`. Commit cả hai để Linux và Keil cùng danh sách file.
 
 ## Bộ nhớ và OTA
 

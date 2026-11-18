@@ -41,12 +41,11 @@
 | | `bsp/board_config.h` | UART 9600 → **115200** | Sửa |
 | | `app/inc/app_cfg.h` | `APP_ENABLE_COMM = 1` | Sửa |
 | | `STM32F103C8Tx_FLASH.ld`, `keil/STM32F103C8.sct`, `keil/MCU_Project.uvprojx` | App dời về **0x08002000, 55 KiB** | Sửa |
-| Build | `Makefile`, `tools/sources.json`, `tools/bootloader_sources.json`, `tools/sync_projects.py`, `tools/make_meta.py` | Target `boot`, `flash-boot`, metadata lần đầu | Sửa / mới |
+| Build | `Makefile`, `bootloader/make_meta.py` | Target `boot`, `flash-boot`, metadata lần đầu | Sửa / mới |
 | ESP32 | `esp32/src/uart_bridge.cpp` | Máy trạng thái gửi, timeout, retry 3 lần | Viết mới |
 | | `esp32/src/main.cpp`, `web_ota.cpp` | Wi-Fi AP + log, web server | Khôi phục |
 | | `esp32/src/fw_store.cpp`, `include/stm32_memory_map.h` | Kiểm tra theo layout mới | Sửa |
 | | `esp32/platformio.ini` | `lib_extra_dirs = ../common` | Sửa |
-| Test | `tests/host/test_ota.c`, `tests/run_ota_tests.sh` | Codec + máy trạng thái bootloader trên Flash giả | Mới |
 
 Gợi ý thứ tự đọc: `ota_frame.h` → `boot_protocol.c` → `uart_bridge.cpp` → `boot_validate.c` → `boot_flash.c` → `boot_jump.c` → `task_comm.c`.
 
@@ -65,9 +64,7 @@ LED PC13: nháy chậm = bootloader chờ BEGIN, nháy nhanh = đang nhận, t�
 
 ### Linux / GCC
 ```bash
-make sync-projects      # sinh lại tools/sources.mk + 2 project Keil
 make                    # app (build/gcc/firmware.*) + bootloader (build/gcc-boot/bootloader.*)
-sh tests/run_ota_tests.sh   # test PC
 ```
 Kiểm tra trong output `size` và file `.map`:
 - `bootloader.elf`: text + data **< 8192 B**, `.isr_vector` ở 0x08000000.
@@ -94,7 +91,7 @@ pio run -t uploadfs
    - **Qua ST-Link:** `make flash` → ghi app ở 0x08002000 + `meta.bin` ở 0x0800FC00. Reset: LED tắt, app chạy.
    - **Qua ESP32:** bỏ qua, nạp app bằng web ở bước 6 (bootloader đang chờ sẵn).
 
-Keil: nạp `bootloader.axf` trước; app nạp qua ESP32 (hoặc tự chạy `python tools/make_meta.py build/keil/firmware.bin meta.bin` rồi ghi `meta.bin` ở 0x0800FC00).
+Keil: nạp `bootloader.axf` trước; app nạp qua ESP32 (hoặc tự chạy `python bootloader/make_meta.py build/keil/firmware.bin meta.bin` rồi ghi `meta.bin` ở 0x0800FC00).
 
 ## 6. Luồng OTA hằng ngày
 1. Build app → lấy `firmware.bin` (đã link ở 0x08002000).
@@ -112,20 +109,14 @@ Keil: nạp `bootloader.axf` trước; app nạp qua ESP32 (hoặc tự chạy `
 
 ## 7. Ca kiểm thử (mục 8 của đặc tả)
 
-| # | Ca | Cách thử | Kỳ vọng | Tự động (PC) | Board |
-|---|---|---|---|---|---|
-| 1 | Codec | `run_ota_tests.sh` | CRC khớp vector, 8 frame mẫu encode/decode đúng, magic trong payload vẫn 1 frame | `test_codec` | – |
-| 2 | Mất byte / sai CRC / sai LEN | Test PC; trên board: rút dây RX giữa chừng | Không ghi từ frame hỏng, frame gửi lại được nhận | `test_codec`, `test_timeout_and_state` | ☐ |
-| 3 | Mất READY / ACK(BEGIN) | Test PC | ENTER lặp lại → READY; BEGIN lặp lại → ACK, không xoá thêm | `test_lost_ready_and_begin_ack` | ☐ |
-| 4 | Gói thường / gói cuối | File 1000 B (gói cuối 104), 1001 B (105, đệm FF) | CRC bỏ byte đệm, app hợp lệ | `test_sizes` | ☐ |
-| 5 | ACK(DATA) mất / ACK cũ | Test PC | Gói trùng chỉ ACK lại, không ghi lặp | `test_duplicate_and_bad_data` | ☐ |
-| 6 | Sai số / sai độ dài, CRC đúng | Test PC | BAD_SEQ / BAD_LENGTH trước khi ghi | `test_duplicate_and_bad_data` | – |
-| 7 | BEGIN quá lớn | Test PC | BAD_IMAGE_SIZE, app + metadata cũ nguyên | `test_image_errors` | ☐ |
-| 8 | Mất ACK(END) | Test PC | END lặp lại → ACK, commit đúng 1 lần | `test_duplicate_and_bad_data` | ☐ |
-| 9 | Mất điện sau xoá / giữa DATA | Rút nguồn STM32 khi web báo "dang nap" | Bật lại: LED nháy chậm (ở bootloader), nạp lại từ đầu được | – | ☐ |
-| 10 | CRC sai / vector sai | Test PC; board: upload file build ở 0x08000000 | ESP32 từ chối ngay; nếu lọt: BAD_VECTOR/IMAGE_CRC_ERROR, không commit | `test_image_errors` | ☐ |
-| 11 | App chạy + build | Nạp OTA, quan sát app | App khởi động, FreeRTOS chạy, ENTER_UPDATE lần sau vẫn vào bootloader | – | ☐ |
-| 12 | Timeout phiên 15 s | Test PC | Về WAIT_BEGIN, DATA sau đó BAD_STATE | `test_timeout_and_state` | ☐ |
+| # | Ca thử trên board | Cách thử | Kỳ vọng | Kết quả |
+|---|---|---|---|---|
+| 1 | Nạp bình thường | Upload `firmware.bin`, bấm Nạp | ACK(END), ~2 s sau app mới chạy | ☐ |
+| 2 | Ảnh lẻ gói | File 1001 B (gói cuối đệm FF) | App hợp lệ, CRC đúng | ☐ |
+| 3 | Rút dây RX giữa chừng | Rút rồi cắm lại khi đang nạp | ESP32 gửi lại, không ghi frame hỏng | ☐ |
+| 4 | Mất điện khi đang nạp | Rút nguồn STM32 lúc "dang nap" | Bật lại: LED nháy chậm, nạp lại được | ☐ |
+| 5 | File sai địa chỉ | Upload bản build ở 0x08000000 | ESP32 từ chối, app cũ còn nguyên | ☐ |
+| 6 | Vào OTA lần hai | Nạp xong, nạp tiếp lần nữa | App mới vẫn nhận ENTER_UPDATE | ☐ |
 
 Khi chạy trên board, ghi kết quả + log vào `tests/manual/MANH.md`.
 
@@ -142,19 +133,3 @@ Khi chạy trên board, ghi kết quả + log vào `tests/manual/MANH.md`.
 - Không xác thực chữ ký (CRC chỉ phát hiện lỗi).
 - App chưa gửi version sau khi khởi động; "thành công" = có ACK(END).
 - Timeout 100 ms cho DATA chưa đo trên board, chỉnh nếu thấy retry nhiều trong log.
-
-## 10. Công cụ test từ máy tính (`tools/ota_test.py`)
-Chạy bằng Python có pyserial (Windows: `~/.platformio/penv/Scripts/python.exe`, Linux: `pip install pyserial`).
-
-| Lệnh | Dùng để |
-|---|---|
-| `python tools/ota_test.py make-bin test.bin --size 1001` | Tạo app.bin **giả** hợp lệ (chỉ để test truyền, KHÔNG nạp vào STM32 thật — xem cảnh báo) |
-| `python tools/ota_test.py http-put build/gcc/firmware.bin [--flash]` | Máy đang vào Wi-Fi ESP32: upload như trình duyệt, in thời gian từng bước, theo dõi `/status` |
-| `python tools/ota_test.py serial-put COM5 firmware.bin [--flash]` | Upload qua cáp USB của ESP32 (không cần Wi-Fi), dùng console `put`/`flash` |
-| `python tools/ota_test.py fake-stm32 COM6 [--fail-every 4]` | Giả lập STM32 trên USB-UART nối GPIO17/GPIO16, thử retry khi bỏ frame |
-
-Console USB của ESP32 (115200): `help`, `ls`, `status`, `put <size>`, `flash`.
-
-> **Cảnh báo:** `--flash` với file từ `make-bin` mà ESP32 đang nối STM32 thật sẽ commit một app giả hợp lệ CRC/vector.
-> Bootloader sẽ nhảy vào app đó ở mọi lần khởi động và STM32 không nhận ENTER_UPDATE nữa → phải nạp lại bằng ST-Link
-> (`make flash`, hoặc xoá page metadata 0x0800FC00 để bootloader ở lại chờ nạp).

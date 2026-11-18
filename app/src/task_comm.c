@@ -13,7 +13,6 @@
 #include "hal_uart.h"
 #include "ota_frame.h"
 
-#define COMM_READ_TIMEOUT_MS   50U
 #define COMM_OFF_ACK_TIMEOUT_MS 500U   /* ESP32 chờ READY 1000 ms: còn đủ thời gian reset */
 
 static uint32_t now_ms(void) { return (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS); }
@@ -34,19 +33,15 @@ static void comm_task(void *arg)
     (void)arg;
     ota_parser_t rx;
     ota_parser_reset(&rx);
-    uint32_t errors = hal_uart_rx_error_count();
-
     for (;;) {
         uint8_t byte;
-        if (hal_uart_read(&byte, pdMS_TO_TICKS(COMM_READ_TIMEOUT_MS)) != HAL_OK) continue;
-
-        /* Driver đã bỏ byte lỗi (ORE/FE/NE/PE): frame đang nhận không còn tin được. */
-        uint32_t e = hal_uart_rx_error_count();
-        if (e != errors) {
-            errors = e;
-            ota_parser_on_uart_error(&rx);
+        /* RX buffer rỗng: nhường CPU 1 ms (128 B buffer ≈ 11 ms ở 115200, dư sức). */
+        if (!ReceiveInterrupt_UART(&byte)) {
+            vTaskDelay(1);
+            continue;
         }
 
+        /* Byte hỏng không được báo riêng: CRC16 + timeout 20 ms của parser tự loại frame lỗi. */
         if (!ota_parser_feed(&rx, byte, now_ms())) continue;
         if (rx.body[0] == OTA_T_ENTER_UPDATE && rx.len == 1U)
             enter_bootloader();

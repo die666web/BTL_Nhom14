@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Tạo metadata OTA cho lần nạp app đầu tiên bằng ST-Link (không qua ESP32).
-   Dùng: python tools/make_meta.py build/gcc/firmware.bin build/gcc/meta.bin
+   Dùng: python bootloader/make_meta.py build/gcc/firmware.bin build/gcc/meta.bin
    Nạp meta.bin tại 0x0800FC00 (OTA_META_BASE). Bố cục khớp bootloader/src/boot_validate.c:
      +0 size u32 LE, +4 image_crc32 u32 LE (CRC-32/ISO-HDLC), +8 valid u16 = 0xA55A."""
 import struct

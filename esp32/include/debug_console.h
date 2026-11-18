@@ -9,6 +9,6 @@
  *                   ESP32 trả "PUT READY", PC gửi từng khối <= 256 B, mỗi khối chờ "." rồi gửi tiếp.
  *                   Kết thúc: "PUT OK <size> <crc>" hoặc "PUT ERR <lý do>".
  *   flash           nạp /fw.bin xuống STM32 (giống nút trên web)
- * Công cụ PC: tools/ota_test.py serial-put. */
+ * Dùng Serial Monitor của PlatformIO (help/ls/status/flash); "put" cần script PC gửi theo khối. */
 void debug_console_loop(void);
 #endif
