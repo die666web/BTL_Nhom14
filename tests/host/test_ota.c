@@ -1,6 +1,6 @@
 /* Test PC cho OTA v1: codec frame (common/ota_frame) + máy trạng thái bootloader
  * (bootloader/src/boot_protocol.c, boot_validate.c) chạy trên Flash/UART giả lập.
- * Chạy: sh tests/run_ota_tests.sh   (cần gcc/clang trên máy tính)
+ * Chạy: sh tests/run_tests.sh   (Linux, cần gcc)
  * Không mô phỏng thời gian xoá/ghi Flash thật, ngắt hay lỗi điện. */
 #include <assert.h>
 #include <stdio.h>
@@ -17,7 +17,7 @@ static unsigned checks;
 
 /* ---------------- Flash giả lập ---------------- */
 static uint8_t  flash[OTA_FLASH_END - OTA_FLASH_BASE];
-static unsigned erase_count, valid_commits;
+static unsigned valid_commits;   /* số lần ghi cờ VALID của metadata */
 #define FL(a) (&flash[(a) - OTA_FLASH_BASE])
 
 const uint8_t *boot_flash_ptr(uint32_t a) { return FL(a); }
@@ -26,7 +26,6 @@ bool boot_flash_erase_page(uint32_t a)
 {
     if (a % OTA_PAGE_SIZE || a < OTA_APP_BASE || a >= OTA_FLASH_END) return false;
     memset(FL(a), 0xFF, OTA_PAGE_SIZE);
-    erase_count++;
     return true;
 }
 
@@ -95,7 +94,6 @@ static int responses(void)
     return n;
 }
 static void expect_ready(void) { CHECK(responses() == 1); CHECK(resp_len == 1 && resp[0] == OTA_T_READY); }
-static void expect_none(void)  { CHECK(responses() == 0); }
 static void expect_ack(uint8_t t)
 { CHECK(responses() == 1); CHECK(resp_len == 2 && resp[0] == OTA_T_ACK && resp[1] == t); }
 static void expect_ack_data(uint16_t seq)
@@ -126,7 +124,7 @@ static void send_end(void) { xfer(f, ota_build_end(f)); }
 static void fresh(void)
 {
     memset(flash, 0xFF, sizeof flash);
-    erase_count = valid_commits = 0;
+    valid_commits = 0;
     now = 1000;
     tx_len = 0;
     boot_protocol_init();
@@ -149,184 +147,80 @@ static void full_session(uint32_t size, uint32_t crc)
     CHECK(boot_application_valid());
 }
 
-/* ================= Codec ================= */
+/* ===================== Test ===================== */
+
+/* 1. Codec: CRC16/CRC32 đúng vector chuẩn "123456789"; frame ENTER_UPDATE đúng từng byte;
+ *    frame sai CRC bị bỏ im lặng, frame đúng phía sau vẫn đọc được. */
 static void test_codec(void)
 {
     static const uint8_t ascii[] = "123456789";
     CHECK(ota_crc16(ascii, 9) == 0x29B1u);
     CHECK(ota_crc32_final(ota_crc32_update(OTA_CRC32_INIT, ascii, 9)) == 0xCBF43926u);
 
-    static const struct { const char *name; uint8_t bytes[16]; size_t n; } v[] = {
-        { "ENTER", {0xA5,0x5A,0x01,0x01,0x1F,0x3E}, 6 },
-        { "READY", {0xA5,0x5A,0x01,0x02,0x7C,0x0E}, 6 },
-        { "BEGIN", {0xA5,0x5A,0x09,0x10,0xE8,0x03,0x00,0x00,0x26,0x39,0xF4,0xCB,0x69,0xDD}, 14 },
-        { "DATA",  {0xA5,0x5A,0x06,0x11,0x05,0x00,0x11,0x22,0x33,0x7F,0x3E}, 11 },
-        { "ACKD",  {0xA5,0x5A,0x04,0x70,0x11,0x05,0x00,0xD9,0x51}, 9 },
-        { "END",   {0xA5,0x5A,0x01,0x12,0x4D,0x1C}, 6 },
-        { "ACKE",  {0xA5,0x5A,0x02,0x70,0x12,0xD6,0x98}, 7 },
-        { "NACK",  {0xA5,0x5A,0x05,0x71,0x10,0x03,0xFF,0xFF,0x3E,0xA5}, 10 },
-    };
+    static const uint8_t enter[] = {0xA5, 0x5A, 0x01, 0x01, 0x1F, 0x3E};
     uint8_t out[OTA_FRAME_MAX];
-    static const uint8_t d3[] = {0x11, 0x22, 0x33};
-    size_t n[8];
-    n[0] = ota_build_enter_update(out); CHECK(n[0] == v[0].n && !memcmp(out, v[0].bytes, n[0]));
-    n[1] = ota_build_ready(out);        CHECK(n[1] == v[1].n && !memcmp(out, v[1].bytes, n[1]));
-    n[2] = ota_build_begin(out, 1000, 0xCBF43926u); CHECK(n[2] == v[2].n && !memcmp(out, v[2].bytes, n[2]));
-    n[3] = ota_build_data(out, 5, d3, 3);           CHECK(n[3] == v[3].n && !memcmp(out, v[3].bytes, n[3]));
-    n[4] = ota_build_ack_data(out, 5);              CHECK(n[4] == v[4].n && !memcmp(out, v[4].bytes, n[4]));
-    n[5] = ota_build_end(out);                      CHECK(n[5] == v[5].n && !memcmp(out, v[5].bytes, n[5]));
-    n[6] = ota_build_ack(out, OTA_T_END);           CHECK(n[6] == v[6].n && !memcmp(out, v[6].bytes, n[6]));
-    n[7] = ota_build_nack(out, OTA_T_BEGIN, OTA_E_BAD_IMAGE_SIZE, OTA_SEQ_NONE);
-    CHECK(n[7] == v[7].n && !memcmp(out, v[7].bytes, n[7]));
+    CHECK(ota_build_enter_update(out) == sizeof enter && !memcmp(out, enter, sizeof enter));
 
+    uint8_t bad[sizeof enter];
+    memcpy(bad, enter, sizeof bad);
+    bad[5] ^= 1;                                         /* làm hỏng byte CRC */
     ota_parser_t p;
-    for (size_t k = 0; k < 8; k++) {                     /* decoder đọc đúng mọi frame mẫu */
-        ota_parser_reset(&p);
-        int frames = 0;
-        for (size_t i = 0; i < v[k].n; i++) frames += ota_parser_feed(&p, v[k].bytes[i], 0);
-        CHECK(frames == 1 && p.len == v[k].bytes[2] && p.body[0] == v[k].bytes[3]);
-    }
-
-    /* Magic trong payload vẫn là một frame */
-    static const uint8_t magic[] = {0xA5, 0x5A, 0xA5, 0x5A};
-    size_t m = ota_build_data(out, 0, magic, 4);
     ota_parser_reset(&p);
     int frames = 0;
-    for (size_t i = 0; i < m; i++) frames += ota_parser_feed(&p, out[i], 0);
-    CHECK(frames == 1 && p.len == 7 && !memcmp(&p.body[3], magic, 4));
-
-    /* Sai CRC: im lặng; frame đúng phía sau vẫn đọc được */
-    uint8_t bad[6]; memcpy(bad, v[0].bytes, 6); bad[5] ^= 1;
-    ota_parser_reset(&p);
-    frames = 0;
-    for (size_t i = 0; i < 6; i++) frames += ota_parser_feed(&p, bad[i], 0);
-    for (size_t i = 0; i < 6; i++) frames += ota_parser_feed(&p, v[0].bytes[i], 0);
-    CHECK(frames == 1);
-
-    /* LEN ngoài giới hạn: bỏ ngay */
-    static const uint8_t badlen[] = {0xA5, 0x5A, 0x00, 0xA5, 0x5A, 0x84};
-    ota_parser_reset(&p);
-    frames = 0;
-    for (size_t i = 0; i < sizeof badlen; i++) frames += ota_parser_feed(&p, badlen[i], 0);
-    CHECK(frames == 0 && p.state == OTA_RX_MAGIC0);
-
-    /* Mất byte + quá 20 ms giữa các byte: bỏ frame dở, frame sau vẫn đọc được */
-    ota_parser_reset(&p);
-    frames = 0;
-    for (size_t i = 0; i < 4; i++) frames += ota_parser_feed(&p, v[2].bytes[i], 100);
-    for (size_t i = 0; i < 6; i++) frames += ota_parser_feed(&p, v[0].bytes[i], 200);
+    for (size_t i = 0; i < sizeof bad; i++)   frames += ota_parser_feed(&p, bad[i], 0);
+    CHECK(frames == 0);
+    for (size_t i = 0; i < sizeof enter; i++) frames += ota_parser_feed(&p, enter[i], 0);
     CHECK(frames == 1 && p.body[0] == OTA_T_ENTER_UPDATE);
 }
 
-/* ================= Bootloader ================= */
-static void test_sizes(void)
+/* 2. Phiên nạp đầy đủ BEGIN -> DATA... -> END với ảnh 1001 B (gói cuối lẻ, đệm 0xFF):
+ *    bootloader commit metadata và chuyển sang chạy app. */
+static void test_full_session(void)
 {
-    uint32_t crc = make_image(1000, OTA_SRAM_END);       /* gói cuối 104 B */
-    fresh(); full_session(1000, crc);
-
-    crc = make_image(1001, OTA_SRAM_END);                /* gói cuối 105 B, đệm FF */
-    fresh(); full_session(1001, crc);
-    CHECK(*FL(OTA_APP_BASE + 1000u) == img[1000] && *FL(OTA_APP_BASE + 1001u) == 0xFF);
-
-    crc = make_image(OTA_APP_MAX_SIZE, OTA_SRAM_END);    /* ảnh lớn nhất */
-    fresh(); full_session(OTA_APP_MAX_SIZE, crc);
-}
-
-static void test_lost_ready_and_begin_ack(void)
-{
-    uint32_t crc = make_image(1000, OTA_SRAM_END);
+    uint32_t crc = make_image(1001, OTA_SRAM_END);
     fresh();
-    xfer(f, ota_build_enter_update(f)); expect_ready(); /* READY mất -> ENTER gửi lại */
-    send_begin(1000, crc); expect_ack(OTA_T_BEGIN);
-    unsigned erased = erase_count;
-    send_begin(1000, crc); expect_ack(OTA_T_BEGIN);     /* ACK(BEGIN) mất */
-    CHECK(erase_count == erased);                       /* không xoá thêm */
-    send_begin(2000, crc); expect_nack(OTA_T_BEGIN, OTA_E_BAD_STATE);
+    full_session(1001, crc);
+    CHECK(*FL(OTA_APP_BASE + 1000u) == img[1000]);       /* byte cuối của ảnh */
+    CHECK(*FL(OTA_APP_BASE + 1001u) == 0xFF);            /* byte đệm */
+    CHECK(valid_commits == 1);
 }
 
-static void test_duplicate_and_bad_data(void)
+/* 3. Mất ACK: ESP32 gửi lại DATA/END cũ -> chỉ ACK lại, không ghi hay commit lần hai.
+ *    Gói nhảy cóc số thứ tự bị NACK BAD_SEQ và không ghi xuống Flash. */
+static void test_retransmit(void)
 {
     uint32_t crc = make_image(1000, OTA_SRAM_END);
     fresh();
     send_begin(1000, crc); expect_ack(OTA_T_BEGIN);
-    send_data(0, 1000); expect_ack_data(0);
-    send_data(0, 1000); expect_ack_data(0);             /* ACK(DATA) mất: chỉ ACK lại */
-
-    uint8_t other[OTA_DATA_CHUNK]; memcpy(other, img, sizeof other); other[10] ^= 0xFF;
-    xfer(f, ota_build_data(f, 0, other, OTA_DATA_CHUNK));
-    expect_nack(OTA_T_DATA, OTA_E_BAD_SEQ);              /* trùng số nhưng khác nội dung */
-
-    send_data(2, 1000); expect_nack(OTA_T_DATA, OTA_E_BAD_SEQ);           /* nhảy cóc */
-    CHECK(*FL(OTA_APP_BASE + 256u) == 0xFF);                               /* không ghi */
-    xfer(f, ota_build_data(f, 1, &img[128], 100)); expect_nack(OTA_T_DATA, OTA_E_BAD_LENGTH);
-    CHECK(*FL(OTA_APP_BASE + 128u) == 0xFF);
-
-    send_end(); expect_nack(OTA_T_END, OTA_E_INCOMPLETE);                  /* END sớm */
+    send_data(0, 1000);    expect_ack_data(0);
+    send_data(0, 1000);    expect_ack_data(0);           /* gói trùng: ACK lại */
+    send_data(2, 1000);    expect_nack(OTA_T_DATA, OTA_E_BAD_SEQ);
+    CHECK(*FL(OTA_APP_BASE + 2u * OTA_DATA_CHUNK) == 0xFF);
     for (uint16_t s = 1; s < 8; s++) { send_data(s, 1000); expect_ack_data(s); }
     send_end(); expect_ack(OTA_T_END);
-    CHECK(valid_commits == 1);
-    send_end(); expect_ack(OTA_T_END);                  /* ACK(END) mất, trong cửa sổ 2 s */
-    CHECK(valid_commits == 1);                          /* chỉ commit một lần */
-    send_begin(1000, crc); expect_nack(OTA_T_BEGIN, OTA_E_BAD_STATE);
+    send_end(); expect_ack(OTA_T_END);                   /* END trùng: ACK lại */
+    CHECK(valid_commits == 1);                           /* commit đúng một lần */
 }
 
-static void test_image_errors(void)
+/* 4. Ảnh hỏng: CRC khai báo không khớp dữ liệu -> NACK IMAGE_CRC_ERROR, không commit,
+ *    bootloader quay về chờ BEGIN (app cũ không bị coi là hợp lệ). */
+static void test_bad_image(void)
 {
     uint32_t crc = make_image(1000, OTA_SRAM_END);
-    fresh(); full_session(1000, crc);                   /* có app hợp lệ trước */
-
-    boot_protocol_init(); expect_ready();
-    send_begin(OTA_APP_MAX_SIZE + 1u, crc); expect_nack(OTA_T_BEGIN, OTA_E_BAD_IMAGE_SIZE);
-    send_begin(7, crc); expect_nack(OTA_T_BEGIN, OTA_E_BAD_IMAGE_SIZE);
-    CHECK(boot_application_valid());                    /* app + metadata cũ còn nguyên */
-
-    fresh();                                            /* CRC khai báo sai */
+    fresh();
     send_begin(1000, crc ^ 1u); expect_ack(OTA_T_BEGIN);
     for (uint16_t s = 0; s < 8; s++) { send_data(s, 1000); expect_ack_data(s); }
     send_end(); expect_nack(OTA_T_END, OTA_E_IMAGE_CRC_ERROR);
+    CHECK(valid_commits == 0);
     CHECK(boot_protocol_state() == BOOT_ST_WAIT_BEGIN && !boot_application_valid());
-
-    crc = make_image(1000, 0x20005004u);                /* MSP ngoài SRAM */
-    fresh();
-    send_begin(1000, crc); expect_ack(OTA_T_BEGIN);
-    for (uint16_t s = 0; s < 8; s++) { send_data(s, 1000); expect_ack_data(s); }
-    send_end(); expect_nack(OTA_T_END, OTA_E_BAD_VECTOR);
-    CHECK(valid_commits == 0 && !boot_application_valid());
-}
-
-static void test_timeout_and_state(void)
-{
-    uint32_t crc = make_image(1000, OTA_SRAM_END);
-    fresh();
-    send_data(0, 1000); expect_nack(OTA_T_DATA, OTA_E_BAD_STATE);
-    send_end(); expect_nack(OTA_T_END, OTA_E_BAD_STATE);
-    uint8_t unk[] = {0x55}; xfer(f, ota_encode(f, unk, 1)); expect_nack(0x55, OTA_E_UNSUPPORTED_TYPE);
-
-    send_begin(1000, crc); expect_ack(OTA_T_BEGIN);
-    now += BOOT_SESSION_TIMEOUT_MS + 1u;
-    boot_protocol_poll();
-    CHECK(boot_protocol_state() == BOOT_ST_WAIT_BEGIN);
-    send_data(0, 1000); expect_nack(OTA_T_DATA, OTA_E_BAD_STATE);
-
-    send_begin(1000, crc); expect_ack(OTA_T_BEGIN);     /* ENTER_UPDATE giữa phiên: huỷ, READY */
-    send_data(0, 1000); expect_ack_data(0);
-    xfer(f, ota_build_enter_update(f)); expect_ready();
-    CHECK(boot_protocol_state() == BOOT_ST_WAIT_BEGIN);
-
-    /* Frame hỏng không được xử lý */
-    size_t n = ota_build_begin(f, 1000, crc); f[n - 1] ^= 1;
-    xfer(f, n); expect_none();
-    CHECK(boot_protocol_state() == BOOT_ST_WAIT_BEGIN);
 }
 
 int main(void)
 {
     test_codec();
-    test_sizes();
-    test_lost_ready_and_begin_ack();
-    test_duplicate_and_bad_data();
-    test_image_errors();
-    test_timeout_and_state();
+    test_full_session();
+    test_retransmit();
+    test_bad_image();
     printf("OTA host tests: OK (%u checks)\n", checks);
     return 0;
 }

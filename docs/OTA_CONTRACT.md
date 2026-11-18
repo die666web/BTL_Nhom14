@@ -173,6 +173,6 @@ sequenceDiagram
 - DATA thừa sau khi đã đủ size → BAD_SEQ.
 - Cờ BKP_DR1 = 0xB007 (`OTA_BKP_FLAG_UPDATE`). Blue Pill nối VBAT với 3,3 V nên mất điện là cờ mất (đúng ý muốn).
 - App chưa có TaskControl: TaskComm vẫn set OTA_REQUEST, rồi `bsp_reboot_to_bootloader()` tự ép relay OFF trước khi reset.
-  Bootloader cũng giữ PB8 ở mức OFF suốt thời gian chạy.
-- Nạp app lần đầu bằng ST-Link cần thêm metadata: `make flash` tự tạo `meta.bin` bằng `tools/make_meta.py`.
+  Bootloader cũng giữ relay (PA0) ở mức OFF suốt thời gian chạy.
+- Nạp app lần đầu bằng ST-Link cần thêm metadata: `make flash` tự tạo `meta.bin` bằng `bootloader/make_meta.py`.
 - Khởi động thường: bootloader tính CRC-32 toàn ảnh (bitwise, HSI 8 MHz) trước khi chạy app, ảnh 55 KiB mất khoảng 0,3 s.

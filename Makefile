@@ -8,7 +8,20 @@ TARGET := $(BUILD)/firmware
 LDSCRIPT := STM32F103C8Tx_FLASH.ld
 FREERTOS := middlewares/FreeRTOS-Kernel
 PORT := $(FREERTOS)/portable/GCC/ARM_CM3
-include tools/sources.mk
+# Danh sách source app (phải khớp nhóm file trong keil/MCU_Project.uvprojx).
+APP_SRCS := main.c startup.c bsp/bsp.c \
+    hal/src/hal_gpio.c hal/src/hal_rcc.c hal/src/hal_uart.c hal/src/hal_i2c.c \
+    hal/src/relay.c hal/src/button.c hal/src/ina219.c hal/src/oled.c \
+    app/src/app_ipc.c app/src/rtos_hooks.c app/src/task_comm.c app/src/task_control.c \
+    app/src/task_display.c app/src/task_measure.c \
+    common/ota_frame/ota_frame.c \
+    $(FREERTOS)/tasks.c $(FREERTOS)/list.c $(FREERTOS)/queue.c $(FREERTOS)/timers.c \
+    $(FREERTOS)/event_groups.c $(FREERTOS)/stream_buffer.c \
+    $(PORT)/port.c $(FREERTOS)/portable/MemMang/heap_4.c
+# Source bootloader (khớp keil/Bootloader.uvprojx).
+BOOT_SRCS := bootloader/src/main.c startup.c bootloader/src/boot_port.c \
+    bootloader/src/boot_flash.c bootloader/src/boot_validate.c \
+    bootloader/src/boot_protocol.c bootloader/src/boot_jump.c common/ota_frame/ota_frame.c
 OBJS := $(addprefix $(BUILD)/,$(APP_SRCS:.c=.o))
 CPPFLAGS := -I. -Ibsp -Ihal/inc -Iapp/inc -Icommon/ota_frame -I$(FREERTOS)/include -I$(PORT) -DSTM32F10X_MD
 CFLAGS := -mcpu=cortex-m3 -mthumb -mfloat-abi=soft -std=c11 -Wall -Wextra -Werror -Og -g3 -ffreestanding -fno-builtin -ffunction-sections -fdata-sections -MMD -MP
@@ -26,13 +39,13 @@ BOOT_LDFLAGS := -mcpu=cortex-m3 -mthumb -mfloat-abi=soft -T$(BOOT_LDSCRIPT) -nos
 .DELETE_ON_ERROR:
 all: $(TARGET).bin $(TARGET).hex boot
 boot: $(BOOT_TARGET).bin $(BOOT_TARGET).hex
-$(BOOT_BUILD)/%.o: %.c Makefile tools/sources.mk
+$(BOOT_BUILD)/%.o: %.c Makefile
 	@mkdir -p $(dir $@)
 	$(CC) $(BOOT_CPPFLAGS) $(BOOT_CFLAGS) -c $< -o $@
 $(BOOT_TARGET).elf: $(BOOT_OBJS) $(BOOT_LDSCRIPT)
 	$(CC) $(BOOT_OBJS) $(BOOT_LDFLAGS) -o $@
 	$(SIZE) $@
-$(BUILD)/%.o: %.c Makefile tools/sources.mk
+$(BUILD)/%.o: %.c Makefile
 	@mkdir -p $(dir $@)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 $(TARGET).elf: $(OBJS) $(LDSCRIPT)
@@ -51,8 +64,8 @@ $(BOOT_TARGET).hex: $(BOOT_TARGET).elf
 flash: $(TARGET).bin $(BUILD)/meta.bin
 	st-flash write $(TARGET).bin $(APP_BASE)
 	st-flash --reset write $(BUILD)/meta.bin 0x0800FC00
-$(BUILD)/meta.bin: $(TARGET).bin tools/make_meta.py
-	$(PYTHON) tools/make_meta.py $< $@
+$(BUILD)/meta.bin: $(TARGET).bin bootloader/make_meta.py
+	$(PYTHON) bootloader/make_meta.py $< $@
 flash-boot: $(BOOT_TARGET).bin
 	st-flash --reset write $< 0x08000000
 # App thử OTA: cùng thư viện với app thật nhưng main chỉ bật LED PC13 + TaskComm (vẫn OTA lại được).
@@ -65,11 +78,7 @@ $(LED_TARGET).elf: $(LED_OBJS) $(LDSCRIPT)
 	$(SIZE) $@
 $(LED_TARGET).bin: $(LED_TARGET).elf
 	$(OBJCOPY) -O binary $< $@
-sync-projects:
-	$(PYTHON) tools/sync_projects.py
-check-projects:
-	$(PYTHON) tools/sync_projects.py --check
 clean:
 	rm -rf build/gcc build/gcc-boot
 -include $(OBJS:.o=.d) $(BOOT_OBJS:.o=.d) $(BUILD)/tests/ota_led/main_led.d
-.PHONY: all boot flash flash-boot ota-led clean sync-projects check-projects
+.PHONY: all boot flash flash-boot ota-led clean

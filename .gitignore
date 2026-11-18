@@ -35,3 +35,6 @@ sdkconfig.old
 secrets.h
 .env
 # Commit .uvprojx, .sct, .ld, Makefile and source manifests!
+keil/DebugConfig/
+keil/RTE/
+keil/*.scvd
