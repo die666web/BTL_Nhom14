@@ -47,7 +47,7 @@ Bản đồ Flash: bootloader `0x08000000` (8 KiB) · app `0x08002000` (55 KiB) 
 | HAL GPIO/RCC/UART, I2C1 | Mạnh | Đã viết, có test PC |
 | Relay + nút nhấn + TaskControl | Võ | Đã viết, có test PC |
 | OLED + TaskDisplay | Công | Đã viết, chờ test kit |
-| OTA: bootloader + ESP32 + TaskComm | Mạnh | Đã viết, có test PC; ESP32 đã thử nhận/gửi file |
+| OTA: bootloader + ESP32 + TaskComm | Mạnh | Đã viết; ESP32 đã thử nhận/gửi file |
 | INA219 + TaskMeasure | Mạnh | Đã viết |
 
 Cả 4 task đã bật trong `app/inc/app_cfg.h`. `make ota-led` tạo app thử OTA (chỉ sáng LED PC13) để demo nạp qua web.

@@ -154,7 +154,7 @@ sequenceDiagram
     Note over S: Chờ retry, sau đó chạy app
 ```
 
-## 7. Byte mẫu (đã kiểm trong `tests/host/test_ota.c`)
+## 7. Byte mẫu
 | Trường hợp | Frame hex |
 |---|---|
 | ENTER_UPDATE | `A5 5A 01 01 1F 3E` |

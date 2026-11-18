@@ -46,7 +46,6 @@
 | | `esp32/src/main.cpp`, `web_ota.cpp` | Wi-Fi AP + log, web server | Khôi phục |
 | | `esp32/src/fw_store.cpp`, `include/stm32_memory_map.h` | Kiểm tra theo layout mới | Sửa |
 | | `esp32/platformio.ini` | `lib_extra_dirs = ../common` | Sửa |
-| Test | `tests/host/test_ota.c`, `tests/run_tests.sh` | Codec + máy trạng thái bootloader trên Flash giả | Mới |
 
 Gợi ý thứ tự đọc: `ota_frame.h` → `boot_protocol.c` → `uart_bridge.cpp` → `boot_validate.c` → `boot_flash.c` → `boot_jump.c` → `task_comm.c`.
 
@@ -66,7 +65,6 @@ LED PC13: nháy chậm = bootloader chờ BEGIN, nháy nhanh = đang nhận, t�
 ### Linux / GCC
 ```bash
 make                    # app (build/gcc/firmware.*) + bootloader (build/gcc-boot/bootloader.*)
-sh tests/run_tests.sh   # test PC
 ```
 Kiểm tra trong output `size` và file `.map`:
 - `bootloader.elf`: text + data **< 8192 B**, `.isr_vector` ở 0x08000000.
@@ -110,8 +108,6 @@ Keil: nạp `bootloader.axf` trước; app nạp qua ESP32 (hoặc tự chạy `
 5. Khoảng 2 s sau ACK(END), STM32 chạy app mới.
 
 ## 7. Ca kiểm thử (mục 8 của đặc tả)
-
-Test PC (`sh tests/run_tests.sh`): `test_codec`, `test_full_session`, `test_retransmit`, `test_bad_image`.
 
 | # | Ca thử trên board | Cách thử | Kỳ vọng | Kết quả |
 |---|---|---|---|---|

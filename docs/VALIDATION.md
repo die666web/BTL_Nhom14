@@ -3,7 +3,7 @@
 ## Test PC (`sh tests/run_tests.sh`, Linux + gcc)
 
 Chạy logic driver trên máy tính: thanh ghi ngoại vi được giả bằng RAM (mmap), FreeRTOS queue/mutex
-giả đơn giản, Flash/UART của bootloader giả bằng mảng. Không mô phỏng thời gian điện hay ngắt thật.
+giả đơn giản. Không mô phỏng thời gian điện hay ngắt thật.
 
 | Module | Test | Kiểm tra |
 |---|---|---|
@@ -20,10 +20,6 @@ giả đơn giản, Flash/UART của bootloader giả bằng mảng. Không mô 
 | | `test_button_hold_no_repeat` | Giữ nút không lặp, thả không báo |
 | | `test_button_bounce_filtered` | Lọc dội |
 | | `test_button_held_at_boot` | Giữ nút lúc cấp nguồn không tính |
-| OTA | `test_codec` | CRC16/CRC32, frame đúng byte, bỏ frame sai CRC |
-| | `test_full_session` | Nạp trọn ảnh 1001 B, commit metadata |
-| | `test_retransmit` | Gói trùng chỉ ACK lại, nhảy cóc bị NACK, commit một lần |
-| | `test_bad_image` | Sai CRC ảnh: không commit, về chờ BEGIN |
 
 ## Trên phần cứng
 
