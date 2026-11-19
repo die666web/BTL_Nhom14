@@ -1,53 +1,36 @@
-# Kết quả kiểm tra bản khởi đầu — 09/11/2026
+# Kiểm thử — đã làm gì, chưa làm gì
 
-## Đã chạy
+## Test PC (`sh tests/run_tests.sh`, Linux + gcc)
+
+Chạy logic driver trên máy tính: thanh ghi ngoại vi được giả bằng RAM (mmap), FreeRTOS queue/mutex
+giả đơn giản. Không mô phỏng thời gian điện hay ngắt thật.
+
+| Module | Test | Kiểm tra |
+|---|---|---|
+| UART | `test_uart_init` | BRR đúng baud, không init hai lần |
+| | `test_uart_send_number` | In đúng 0, 101, 255 |
+| | `test_uart_read_line` | Nhận một dòng CRLF |
+| | `test_uart_bad_args` | Từ chối NULL và chờ vô hạn |
+| GPIO | `test_gpio_config_output` | Ghi đúng nibble CRH |
+| | `test_gpio_reject_bad_speed` | Output với tốc độ sai không đổi thanh ghi |
+| | `test_gpio_write` | Ghi 1/0 qua BSRR/BRR |
+| Relay | `test_relay_init_off` | Khởi động ở OFF, output push-pull |
+| | `test_relay_on` / `test_relay_off` | Mức chân và `relay_get` đúng |
+| Nút nhấn | `test_button_press_once` | Một lần nhấn = một sự kiện |
+| | `test_button_hold_no_repeat` | Giữ nút không lặp, thả không báo |
+| | `test_button_bounce_filtered` | Lọc dội |
+| | `test_button_held_at_boot` | Giữ nút lúc cấp nguồn không tính |
+
+## Trên phần cứng
 
 | Hạng mục | Kết quả |
 |---|---|
-| Build Linux ARM GCC 13.2.1, Cortex-M3 Thumb soft-float | PASS, 26 C files, compile + link + ELF/BIN/HEX |
-| `-std=c11 -Wall -Wextra -Werror` | Không cảnh báo/lỗi trong build GCC cuối |
-| Host regression bằng GCC + UndefinedBehaviorSanitizer | PASS, 564 assertions |
-| `python3 tools/sync_projects.py --check` | PASS, Make + Keil chung danh sách 26 source |
-| Project Keil | XML parse được, path source/include/scatter hợp lệ, ARM Compiler 6, MicroLIB tắt |
-| Vector table từ ELF/BIN GCC | MSP 0x20005000; vector ở 0x08000000; Reset/SVC/PendSV/SysTick/USART1 đúng strong handler, Thumb bit |
-| FreeRTOS vendored | 811 file giữ nguyên byte từ ZIP gốc, có license |
-| I2C1 `hal_i2c.c` | Biên dịch `-Wall -Wextra -Werror` sạch (gcc host, header FreeRTOS thật); chưa chạy trên kit |
-| Module giao việc | 4 module thiết bị trong `hal/` (INA219/OLED/relay/button), 4 task vẫn chỉ header và TODO; không stub trả thành công |
+| ESP32: upload file qua USB/web | Đã thử (bản v1) |
+| ESP32 nạp qua bootloader ROM (AN3155) | Chưa — code mới, chưa chạy trên kit |
+| Mức kích relay (PA0 = 1 -> đóng) | Đã xác nhận với module |
+| Relay/nút/TaskControl chạy cùng hệ thống | Chưa ghi kết quả — `tests/manual/VO.md` |
+| OLED, INA219, I2C | Chưa — ghi vào `tests/manual/CONG.md`, `MANH.md` |
+| Build Keil ARM Compiler 6 | Chưa chạy Rebuild All |
+| OTA trọn vòng trên Blue Pill (app → bootloader ROM → app mới) | Chưa |
 
-Kích thước bản GCC mặc định (chưa bật bốn task):
-
-- `text = 10.100 bytes`, `data = 4 bytes`.
-- `.bss = 10.696 bytes`, đã gồm FreeRTOS heap 10 KiB.
-- `.heap_stack = 1.540 bytes`, gồm vùng dự phòng và alignment.
-- GNU `size` báo `bss = 12.236 bytes` vì tính cả `.heap_stack` NOBITS.
-- Flash image BIN = 10.104 bytes. Đây là bản khung; không suy ra đủ bộ nhớ cho sản phẩm hoàn chỉnh.
-
-Lệnh chạy lại:
-
-```bash
-make check-projects
-make -j4
-sh tests/run_host_tests.sh
-```
-
-Host test dùng `cc` trên Linux, queue giả và vùng thanh ghi giả bằng mmap. Nó kiểm tra:
-chuyển số 0..255, newline, queue đầy/timeout và nhả mutex, scheduler chưa chạy,
-null/size 0/1, CRLF, dòng quá dài, lỗi/drop RX, GPIO bitfield và DMA config/flag/guard.
-**Không mô phỏng thời gian điện, FreeRTOS scheduler hay tranh chấp ISR thực tế.**
-
-## Chưa kiểm tra — không được coi là đã đạt
-
-- Chưa chạy ARM Compiler 6/armlink thực tế trong Keil; chưa xác nhận load/debug/flash qua µVision.
-  Kiểm XML/path không thay thế Rebuild All. Thành viên Windows cần chạy lần đầu và ghi kết quả.
-- Chưa chạy trên Blue Pill: clock/tick, mức kích relay, mất UART thực tế, heap runtime/stack,
-  hoạt động I2C, OLED, INA219.
-- Chưa có logic sản phẩm hoặc OTA để test end-to-end. Bootloader/ESP32 chỉ là chỗ giao việc,
-  chưa có build target; không được gọi là đã chạy trên cả ba MCU/project.
-- Chưa test SPI/PWM/MAX7219 cũ (nằm ngoài build, không đổi logic).
-- Chưa push repo, tạo branch/protection hay gắn release tag.
-
-## Việc đầu tiên của nhóm
-
-1. Mạnh kiểm baseline trên Blue Pill; xác nhận relay active level, OFF khi reset.
-2. Một thành viên Windows mở Keil Compiler 6, Rebuild All và nạp/debug bản khung.
-3. Sau đó nhận phần việc theo PHAN_CONG; mọi test kit ghi ở `tests/manual/`.
+Hạng mục "Chưa" không được coi là đã đạt.

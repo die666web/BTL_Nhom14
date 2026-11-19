@@ -1,4 +1,5 @@
-; Standalone application ONLY. 64 KiB Flash, 20 KiB RAM.
+; APPLICATION ở đầu Flash 0x08000000, 64 KiB, RAM 20 KiB. Khớp STM32F103C8Tx_FLASH.ld.
+; Cập nhật firmware dùng bootloader ROM của ST, không còn bootloader riêng. Bảng vector nằm đầu ảnh (startup.o +First).
 ; ARM Compiler 6 full C runtime (__main). Do not enable MicroLIB.
 LR_IROM1 0x08000000 0x00010000 {
   ER_IROM1 0x08000000 0x00010000 {

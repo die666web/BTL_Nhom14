@@ -1,6 +1,8 @@
 ENTRY(Reset_Handler)
 
-/* STM32F103C8T6:
+/* APPLICATION nằm ngay đầu Flash 0x08000000, dùng cả 64 KiB.
+ * Không còn bootloader riêng: cập nhật firmware dùng bootloader ROM có sẵn của ST (0x1FFFF000).
+ * STM32F103C8T6:
  * Flash: 64 KB
  * RAM:   20 KB
  */

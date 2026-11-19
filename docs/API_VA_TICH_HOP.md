@@ -4,7 +4,7 @@
 
 - BSP: chân, clock và trạng thái an toàn của board.
 - HAL (`hal/`): mọi code chạm phần cứng, gồm hai phần nằm chung thư mục:
-  - Ngoại vi MCU, file `hal_*`: GPIO/RCC/DMA/UART/I2C. `hal_gpio.h` giữ tên hàm `GPIO_*` đã có, không buộc viết lại.
+  - Ngoại vi MCU, file `hal_*`: GPIO/RCC/UART/I2C. `hal_gpio.h` giữ tên hàm `GPIO_*` đã có, không buộc viết lại.
   - Thiết bị ngoài, file không có tiền tố `hal_`: `ina219`, `oled`, `relay`, `button`.
     Đây là code viết tiếp trên các hàm `hal_*` (ví dụ `ina219.c` gọi `hal_i2c`), **không phải task**:
     chỉ là hàm thư viện được task gọi, không tự chạy, không có vòng lặp/delay riêng.
@@ -19,18 +19,17 @@ Mã không phụ thuộc đường dẫn CMSIS bên ngoài như Makefile cũ.
 
 | Tài nguyên | Chủ sở hữu / cơ chế |
 |---|---|
-| PB8 relay | TaskControl duy nhất ghi trong vận hành; BSP force-off chỉ startup/panic |
-| PA0 button | TaskControl gọi `button_poll_pressed` mỗi 20ms, không dùng TIM2_CH1 |
+| PA0 relay | Kích mức cao, push-pull. TaskControl duy nhất ghi trong vận hành; BSP force-off chỉ lúc khởi động/lỗi/OTA |
+| PB8 button | TaskControl gọi `button_poll_pressed` mỗi 20ms |
 | I2C1 | HAL lấy g_i2c_mutex cho cả transaction (kể cả repeated START); không khóa lồng |
 | INA219 | TaskMeasure duy nhất; không giữ mutex I2C khi delay chờ conversion |
 | OLED | TaskDisplay duy nhất; địa chỉ 7-bit riêng, cùng bus |
 | UART TX | `hal_uart_write` tự mutex toàn message, task context, timeout theo tick |
 | UART RX | TaskComm duy nhất nhận; không đọc lẫn ReadLine/raw byte |
-| DMA | Low-level, một owner cho mỗi channel; UART hiện không dùng DMA |
 | GPIO_ConfigPin/RCC | Khởi tạo trước scheduler, không đổi pin/clock từ các task |
 | Cấu hình RTOS/build | Mạnh giữ, hai compiler dùng cùng source |
 
-UART hiện 9600 baud theo thư viện gốc. Có thể tăng khi test OTA, đổi một chỗ ở BSP và đồng bộ ESP32.
+UART 115200 baud. Đổi thì đổi cùng lúc `BSP_UART_BAUD` và `STM32_UART_BAUD` (esp32/src/uart_bridge.cpp).
 `HAL_OK` của write = đã vào queue; chưa bảo đảm bit cuối ra dây. Timeout có thể đã gửi một phần:
 giao thức phải có length/CRC/ACK/retry, không coi lỗi là chưa gửi byte nào.
 Không truyền `portMAX_DELAY`; không gọi UART task API từ ISR hay trước scheduler.
@@ -42,7 +41,6 @@ UART queue dùng API FromISR và IRQ priority 6 (numerical >=5). Không đổi p
 
 - `g_measurement_queue`: 1 phần tử `app_measurement_t`; producer overwrite, reader peek.
 - `g_control_queue`: 1 phần tử `app_control_state_t`; producer overwrite, reader peek.
-- `g_command_queue`: 8 phần tử enum `app_command_t`; Comm gửi có timeout, báo lỗi khi đầy.
 - `valid=false` và timestamp bảo đảm Display không giả vờ số đo cũ còn hợp lệ.
 - Đơn vị nội bộ V/A/W; chỉ UI chuyển A → mA. Current có thể âm.
 - Mỗi task gọi hàm init thiết bị của nó (`ina219_init`, `oled_init`...) một lần khi bắt đầu; I2C init chung ở main trước task.
@@ -50,13 +48,12 @@ UART queue dùng API FromISR và IRQ priority 6 (numerical >=5). Không đổi p
 ## OTA handshake cần triển khai trong hai task
 
 1. Comm clear `APP_EVENT_RELAY_OFF_ACK` cũ, set `APP_EVENT_OTA_REQUEST`.
-2. Control kiểm tra REQUEST ưu tiên trước mọi ON/TOGGLE/nút; đặt khóa OTA, relay OFF,
+2. Control kiểm tra REQUEST ưu tiên trước nút nhấn; đặt khóa OTA, relay OFF,
    cập nhật mailbox rồi set OFF_ACK. Khi đã khóa, bỏ qua mọi yêu cầu bật.
 3. Comm chờ OFF_ACK có timeout; chưa ACK thì không nhảy/reset.
-4. Leader triển khai request bootloader bền qua reset và quy tắc thoát trạng thái OTA.
+4. `bsp_reboot_to_bootloader()` ghi cờ vào BKP_DR1 rồi reset; `bsp_system_init()` thấy cờ thì nhảy vào bootloader ROM của ST.
 
 Không chờ ACK hoặc delay khi đang giữ mutex. Event ở đây dùng từ task, không từ ISR.
-`APP_CMD_ENTER_OTA` nếu parser sử dụng phải chuyển thành cùng trình tự event, không tạo lối đi bỏ qua ACK.
 
 ## Tạo task
 

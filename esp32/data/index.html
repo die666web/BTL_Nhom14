@@ -1,1 +1,257 @@
-<!-- TODO — Lê Trọng Mạnh: giao diện chọn .bin / upload / tiến độ / phiên bản / lỗi. -->
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>STM32 OTA · Nhóm 14</title>
+<!-- Không dùng CDN/font ngoài: điện thoại nối Wi-Fi ESP32 thì không có internet. -->
+<style>
+:root{
+  --bg:#f4f6fa; --card:#fff; --text:#1b2330; --muted:#6b7686; --line:#e3e8ef;
+  --accent:#2563eb; --accent-2:#1d4ed8; --ok:#16a34a; --warn:#d97706; --err:#dc2626;
+  --shadow:0 1px 2px rgba(16,24,40,.06),0 4px 16px rgba(16,24,40,.06);
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#0f141b; --card:#171e28; --text:#e6ebf2; --muted:#8b97a8; --line:#263040;
+  --accent:#3b82f6; --accent-2:#60a5fa; --shadow:0 1px 2px rgba(0,0,0,.4);
+}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);
+  font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:560px;margin:0 auto;padding:20px 16px 40px}
+header{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+.logo{width:40px;height:40px;border-radius:10px;background:var(--accent);color:#fff;
+  display:grid;place-items:center;font-weight:700;font-size:14px;flex:none}
+h1{font-size:19px;margin:0}
+.sub{color:var(--muted);font-size:13px}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--muted);display:inline-block;margin-right:6px}
+.dot.on{background:var(--ok)} .dot.off{background:var(--err)}
+#conn{margin-left:auto;font-size:13px;color:var(--muted);white-space:nowrap}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+  padding:18px;margin-bottom:14px;box-shadow:var(--shadow)}
+.card h2{font-size:14px;margin:0 0 12px;display:flex;align-items:center;gap:8px}
+.step{width:22px;height:22px;border-radius:50%;background:var(--accent);color:#fff;
+  font-size:12px;display:grid;place-items:center}
+
+.drop{border:2px dashed var(--line);border-radius:12px;padding:26px 14px;text-align:center;
+  cursor:pointer;transition:.15s;color:var(--muted)}
+.drop:hover,.drop.over{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 6%,transparent)}
+.drop b{color:var(--text)}
+.drop svg{width:34px;height:34px;margin-bottom:6px;stroke:var(--accent)}
+#file{display:none}
+.fileinfo{display:none;margin-top:12px;padding:10px 12px;border-radius:10px;background:var(--bg);
+  font-size:13px;justify-content:space-between;gap:10px}
+.fileinfo.show{display:flex}
+.fileinfo .name{font-weight:600;word-break:break-all}
+
+.bar{height:10px;border-radius:99px;background:var(--line);overflow:hidden;margin-top:14px}
+.bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .15s}
+.bar.ok i{background:var(--ok)} .bar.err i{background:var(--err)}
+.barinfo{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:6px;min-height:18px}
+
+button{appearance:none;border:0;border-radius:10px;padding:11px 16px;font:inherit;font-weight:600;
+  cursor:pointer;width:100%;margin-top:14px;background:var(--accent);color:#fff;transition:.15s}
+button:hover:not(:disabled){background:var(--accent-2)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.ghost{background:transparent;color:var(--accent);border:1px solid var(--line)}
+
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.kv{background:var(--bg);border-radius:10px;padding:10px 12px}
+.kv span{display:block;font-size:12px;color:var(--muted)}
+.kv b{font-size:15px;font-variant-numeric:tabular-nums;word-break:break-all}
+.badge{display:inline-block;padding:2px 9px;border-radius:99px;font-size:12px;font-weight:600;
+  background:var(--line);color:var(--muted)}
+.badge.ok{background:color-mix(in srgb,var(--ok) 15%,transparent);color:var(--ok)}
+.badge.warn{background:color-mix(in srgb,var(--warn) 15%,transparent);color:var(--warn)}
+.badge.err{background:color-mix(in srgb,var(--err) 15%,transparent);color:var(--err)}
+
+.msg{display:none;margin-top:12px;padding:10px 12px;border-radius:10px;font-size:13px}
+.msg.show{display:block}
+.msg.ok{background:color-mix(in srgb,var(--ok) 12%,transparent);color:var(--ok)}
+.msg.err{background:color-mix(in srgb,var(--err) 12%,transparent);color:var(--err)}
+
+#log{max-height:150px;overflow:auto;margin:0;font:12px/1.6 ui-monospace,Consolas,monospace;color:var(--muted)}
+#log div:first-child{color:var(--text)}
+footer{text-align:center;color:var(--muted);font-size:12px;margin-top:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="logo">OTA</div>
+  <div>
+    <h1>Cập nhật firmware STM32</h1>
+    <div class="sub">BTL Nhóm 14 · ESP32 web OTA</div>
+  </div>
+  <div id="conn"><span class="dot" id="dot"></span><span id="conntext">Đang kết nối…</span></div>
+</header>
+
+<section class="card">
+  <h2><span class="step">1</span>Tải file .bin lên ESP32</h2>
+  <label class="drop" id="drop" for="file">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/>
+    </svg>
+    <div><b>Chọn file</b> hoặc kéo thả vào đây</div>
+    <div style="font-size:12px;margin-top:4px">File .bin build cho địa chỉ 0x08000000, tối đa 64 KiB</div>
+  </label>
+  <input type="file" id="file" accept=".bin">
+  <div class="fileinfo" id="fileinfo"><span class="name" id="fname"></span><span id="fsize"></span></div>
+  <div class="bar" id="bar"><i></i></div>
+  <div class="barinfo"><span id="pct"></span><span id="speed"></span></div>
+  <button id="up" disabled>Tải lên ESP32</button>
+  <div class="msg" id="upmsg"></div>
+</section>
+
+<section class="card">
+  <h2><span class="step">2</span>Nạp xuống STM32</h2>
+  <div class="grid">
+    <div class="kv"><span>Firmware đã lưu</span><b id="s_fw">–</b></div>
+    <div class="kv"><span>Kích thước</span><b id="s_size">–</b></div>
+    <div class="kv"><span>CRC-32</span><b id="s_crc">–</b></div>
+    <div class="kv"><span>Bản dự phòng</span><b id="s_prev">–</b></div>
+    <div class="kv"><span>Bộ nhớ trống ESP32</span><b id="s_free">–</b></div>
+    <div class="kv"><span>Trạng thái STM32</span><b><span class="badge" id="s_stm">–</span></b></div>
+  </div>
+  <button id="flash" disabled>Nạp xuống STM32</button>
+  <div class="msg" id="flmsg"></div>
+</section>
+
+<section class="card">
+  <h2>Nhật ký</h2>
+  <div id="log"></div>
+</section>
+
+<footer>Chỉ coi là thành công khi STM32 khởi động lại và báo đúng phiên bản.</footer>
+</div>
+
+<script>
+const MAX = 56320;                         /* = STM32_APP_MAX_SIZE */
+const $ = id => document.getElementById(id);
+let picked = null, busy = false;
+
+const fmtSize = n => n < 1024 ? n + ' B' : (n / 1024).toFixed(1) + ' KiB';
+function log(t) {
+  const d = document.createElement('div');
+  d.textContent = new Date().toLocaleTimeString('vi-VN') + '  ' + t;
+  $('log').prepend(d);
+}
+function msg(el, text, ok) {
+  el.textContent = text;
+  el.className = 'msg show ' + (ok ? 'ok' : 'err');
+}
+function setBar(p, cls) {
+  $('bar').className = 'bar' + (cls ? ' ' + cls : '');
+  $('bar').firstElementChild.style.width = p + '%';
+}
+
+/* ---- chọn file ---- */
+function pick(f) {
+  if (!f) return;
+  picked = f;
+  $('fname').textContent = f.name;
+  $('fsize').textContent = fmtSize(f.size);
+  $('fileinfo').classList.add('show');
+  $('upmsg').className = 'msg';
+  setBar(0); $('pct').textContent = ''; $('speed').textContent = '';
+  let err = '';
+  if (!/\.bin$/i.test(f.name)) err = 'File phải có đuôi .bin';
+  else if (f.size > MAX) err = 'File lớn hơn vùng app (' + fmtSize(MAX) + ')';
+  else if (f.size < 8) err = 'File quá nhỏ';
+  if (err) msg($('upmsg'), err, false);
+  $('up').disabled = !!err || busy;
+}
+$('file').onchange = e => pick(e.target.files[0]);
+const drop = $('drop');
+['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e => pick(e.dataTransfer.files[0]));
+
+/* ---- upload ---- */
+$('up').onclick = () => {
+  if (!picked) return;
+  const fd = new FormData();
+  fd.append('fw', picked, picked.name);
+  const x = new XMLHttpRequest();
+  const t0 = performance.now();
+  busy = true; $('up').disabled = true;
+  $('up').textContent = 'Đang tải lên…';
+  log('Bắt đầu tải ' + picked.name);
+
+  x.upload.onprogress = e => {
+    if (!e.lengthComputable) return;
+    const p = e.loaded * 100 / e.total;
+    setBar(p);
+    $('pct').textContent = p.toFixed(0) + '%';
+    const s = e.loaded / ((performance.now() - t0) / 1000);
+    $('speed').textContent = fmtSize(s) + '/s';
+  };
+  const done = () => { busy = false; $('up').textContent = 'Tải lên ESP32'; $('up').disabled = false; refresh(); };
+  x.onload = () => {
+    let r = {};
+    try { r = JSON.parse(x.responseText); } catch (e) {}
+    if (x.status === 200 && r.ok) {
+      setBar(100, 'ok');
+      msg($('upmsg'), 'Đã lưu trên ESP32 · ' + fmtSize(r.size) + ' · CRC ' + r.crc, true);
+      log('Lưu xong, CRC ' + r.crc);
+    } else {
+      setBar(100, 'err');
+      const e = r.error || ('HTTP ' + x.status);
+      msg($('upmsg'), 'Lỗi: ' + e, false);
+      log('Lỗi upload: ' + e);
+    }
+    done();
+  };
+  x.onerror = () => { setBar(100, 'err'); msg($('upmsg'), 'Mất kết nối khi tải lên', false); log('Mất kết nối'); done(); };
+  /* Không chờ mãi: ESP32 không trả lời trong 60 s thì báo lỗi */
+  x.timeout = 60000;
+  x.ontimeout = () => { setBar(100, 'err'); msg($('upmsg'), 'ESP32 không trả lời sau 60 s (xem log USB của ESP32)', false); log('Upload quá thời gian'); done(); };
+  x.open('POST', '/upload');
+  x.send(fd);
+};
+
+/* ---- nạp STM32 ---- */
+$('flash').onclick = async () => {
+  if (!confirm('Nạp firmware đang lưu xuống STM32? Relay sẽ tắt trong lúc nạp.')) return;
+  $('flash').disabled = true;
+  log('Yêu cầu nạp STM32');
+  try {
+    const r = await fetch('/flash', { method: 'POST' });
+    const j = await r.json().catch(() => ({}));
+    if (r.ok && j.ok) { msg($('flmsg'), 'Đã bắt đầu nạp, theo dõi trạng thái bên trên', true); log('Bắt đầu nạp'); }
+    else { msg($('flmsg'), 'Không nạp được: ' + (j.error || 'HTTP ' + r.status), false); log('Lỗi nạp: ' + (j.error || r.status)); }
+  } catch (e) { msg($('flmsg'), 'Mất kết nối ESP32', false); }
+  refresh();
+};
+
+/* ---- trạng thái ---- */
+let online = null;
+async function refresh() {
+  if (busy) return;                        /* đang upload: không mở thêm kết nối tới ESP32 */
+  try {
+    const s = await (await fetch('/status', { cache: 'no-store' })).json();
+    if (online !== true) { online = true; log('Đã kết nối ESP32'); }
+    $('dot').className = 'dot on'; $('conntext').textContent = 'Đã kết nối';
+    $('s_fw').textContent = s.fw ? 'Có' : 'Chưa có';
+    $('s_size').textContent = s.fw ? fmtSize(s.size) : '–';
+    $('s_crc').textContent = s.fw ? s.crc : '–';
+    $('s_prev').textContent = s.prev ? 'Có' : 'Không';
+    $('s_free').textContent = s.fs_free != null ? fmtSize(s.fs_free) : '–';
+    const st = String(s.stm32 || '–');
+    const b = $('s_stm');
+    b.textContent = st;
+    b.className = 'badge' + (/xong|ok|done/i.test(st) ? ' ok' : /loi|lỗi|err|fail/i.test(st) ? ' err' : /dang|chua|nap|nạp|gui|gửi|wait/i.test(st) ? ' warn' : '');
+    $('flash').disabled = !s.fw || busy;
+  } catch (e) {
+    if (online !== false) { online = false; log('Mất kết nối ESP32'); }
+    $('dot').className = 'dot off'; $('conntext').textContent = 'Mất kết nối';
+    $('flash').disabled = true;
+  }
+}
+refresh();
+setInterval(refresh, 3000);
+</script>
+</body>
+</html>
