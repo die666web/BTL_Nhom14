@@ -299,9 +299,27 @@ static bool write_and_verify_file(File &file, uint32_t file_size)
 
     while (offset < file_size)
     {
-        size_t length = file.read(block, BLOCK_SIZE);
+        /* Đọc cho đủ khối (hoặc phần còn lại ở cuối file). LittleFS có thể trả về ít hơn
+         * yêu cầu, nên đọc lặp; chỉ khối cuối mới thiếu và mới cần đệm. */
+        uint32_t remaining = file_size - offset;
+        size_t wanted = remaining < BLOCK_SIZE ? remaining : BLOCK_SIZE;
+        size_t length = 0;
 
-        if (length == 0)
+        while (length < wanted)
+        {
+            size_t got = file.read(block + length, wanted - length);
+
+            if (got == 0)
+            {
+                break;
+            }
+
+            length += got;
+        }
+
+        size_t data_length = length;
+
+        if (length != wanted)
         {
             set_status("loi: doc file LittleFS");
             return false;
@@ -328,9 +346,9 @@ static bool write_and_verify_file(File &file, uint32_t file_size)
             return false;
         }
 
-        offset += BLOCK_SIZE;
+        offset += data_length;
 
-        if ((offset / BLOCK_SIZE) % 16 == 0)
+        if ((offset % (16U * BLOCK_SIZE)) == 0 || offset >= file_size)
         {
             uint32_t done = offset < file_size ? offset : file_size;
 
