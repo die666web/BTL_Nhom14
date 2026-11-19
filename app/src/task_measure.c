@@ -38,7 +38,7 @@ static void prvMeasureTask(void *argument)
                     filter_ready = true;
                 } else {
                     filtered_v += (v - filtered_v) * 0.25f;
-                    filtered_i += (i - filtered_i) * 0.25f;
+                    filtered_i += (i - filtered_i) * 0.75f;   /* I: lấy 75% giá trị mới, bám nhanh */
                 }
                 sample.voltage_v = filtered_v;
                 sample.current_a = filtered_i;
